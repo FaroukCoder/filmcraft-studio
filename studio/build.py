@@ -35,9 +35,10 @@ def build(edl: dict, project: Path) -> dict:
 
 
 def export(project: Path, out: Path) -> None:
-    """H.264 with burned captions, CPU rendering (the GPU is unstable under sustained load)."""
+    """H.264, burned captions, loudness normalised to -14 LUFS (the social-platform target),
+    CPU rendering (the GPU is unstable under sustained load)."""
     r = subprocess.run([str(CLI), "--project", str(project), "export", str(out),
-                        "--gpu-rendering", "off", "--settings", '{"burnCaptions": true}'],
+                        "--gpu-rendering", "off", "--settings", '{"burnCaptions": true, "loudnessLufs": -14}'],
                        capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0 or not out.exists():
         raise RuntimeError(f"export failed ({r.returncode}): {r.stdout[-800:]} {r.stderr[-800:]}")

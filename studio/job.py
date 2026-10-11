@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import analyze, build, plan
+from . import analyze, build, plan, virality
 
 JOBS = Path(r"E:\AI\studio-jobs")
 
@@ -41,7 +41,8 @@ def talking_head(video: Path, style: str = "talking-head-default", name: str | N
               "removed_seconds": round(info["duration"] - counts["duration"], 2),
               "cuts": len(edl["segments"]), "captions": counts["captions"],
               "words": len(ws), "fillers_removed": sum(analyze.is_filler(w["w"]) for w in ws),
-              "took_seconds": round(time.time() - t0, 1), "render": str(job / f"render.v{v}.mp4")}
+              "took_seconds": round(time.time() - t0, 1), "render": str(job / f"render.v{v}.mp4"),
+              "virality": virality.score(edl, job / f"render.v{v}.mp4")}
     (job / f"report.v{v}.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     return report
 

@@ -34,3 +34,20 @@ assert snapped[0]["end"] <= snapped[1]["start"] and len(snapped) == 2
 assert plan.base_scale(1920, 1080) == 177.78 and plan.base_scale(1080, 1920) == 100.0
 assert ticks(1.5) == TICKS * 3 // 2
 print("ok")
+
+# virality rubric: band scoring and the measured items on a small EDL
+from studio import virality  # noqa: E402
+assert virality._band(30, 15, 45, 30) == 10 and virality._band(75, 15, 45, 30) == 0 and virality._band(60, 15, 45, 30) == 5
+v = virality.score({"segments": [{"start": 0, "src_in": 0, "src_out": 10, "zoom": 1.12},
+                                 {"start": 10, "src_in": 12, "src_out": 20, "zoom": 1.0}],
+                    "captions": [{"start": 0.2, "end": 2.0, "text": "WHAT'S THE ID?"}]})
+assert v["items"]["hook"]["score"] == 10 and v["items"]["comment_trigger"]["score"] == 10
+assert v["items"]["payoff_loop"]["score"] is None and v["items"]["audio"]["score"] is None
+assert v["total"] is not None and 0 <= v["total"] <= 10
+print("ok")
+
+# pacing: a boundary that is both a cut and a zoom change counts once
+pv = virality.score({"segments": [{"start": 0, "src_in": 0, "src_out": 5, "zoom": 1.12},
+                                  {"start": 5, "src_in": 6, "src_out": 10, "zoom": 1.0}], "captions": []})
+assert pv["items"]["pacing"]["why"].startswith("1.1 changes/10s"), pv["items"]["pacing"]
+print("ok")
