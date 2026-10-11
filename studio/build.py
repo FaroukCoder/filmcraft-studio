@@ -1,0 +1,43 @@
+"""Compile an EDL into a FilmCraft project (commands only) and export it (CPU rendering)."""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from .fc import CLI, TICKS, Session, ticks
+
+
+def build(edl: dict, project: Path) -> dict:
+    """Write `project` (.fcproj) from the EDL. Returns counts for the job report."""
+    w, h = edl["size"]
+    with Session() as fc:
+        fc.run("file.newSequence", name=project.stem, width=w, height=h, fps=edl["fps"])
+        item = fc.run("file.import", paths=[edl["source"]])["items"][0]
+        for s in edl["segments"]:
+            clips = fc.run("timeline.place", item=item, track="V1", time=ticks(s["start"]),
+                           sourceIn=ticks(s["src_in"]), duration=ticks(s["src_out"] - s["src_in"]))
+            fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="scale",
+                   value=round(edl["base_scale"] * s["zoom"], 2))
+        if edl["captions"]:
+            fc.run("captions.newTrack", format="Subtitle", name="Captions")
+            fc.run("captions.setStyle", track="C1", **edl["caption_style"])
+            fps = edl["fps"]
+            for c in edl["captions"]:
+                # frame-exact start in ticks (seconds like 4.8333 land a hair inside the previous
+                # caption -> "a caption already covers this time"); end 2 ms short of the boundary
+                f0, f1 = round(c["start"] * fps), round(c["end"] * fps)
+                fc.run("captions.add", track="C1", text=c["text"], time=f0 * TICKS // fps,
+                       durationSeconds=(f1 - f0) / fps - 0.002)
+        fc.run("file.saveAs", path=str(project))
+        seq = fc.sequence()
+    return {"clips": sum(len(t["items"]) for t in seq["video"]), "captions": len(edl["captions"]),
+            "duration": seq["duration"] / 254_016_000_000}
+
+
+def export(project: Path, out: Path) -> None:
+    """H.264 with burned captions, CPU rendering (the GPU is unstable under sustained load)."""
+    r = subprocess.run([str(CLI), "--project", str(project), "export", str(out),
+                        "--gpu-rendering", "off", "--settings", '{"burnCaptions": true}'],
+                       capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0 or not out.exists():
+        raise RuntimeError(f"export failed ({r.returncode}): {r.stdout[-800:]} {r.stderr[-800:]}")

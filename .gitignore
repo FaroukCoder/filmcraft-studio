@@ -5,3 +5,6 @@ plan/
 /log
 .DS_Store
 .claude/worktrees/
+
+# Creative Studio orchestrator
+studio/__pycache__/
