@@ -29,7 +29,7 @@ def talking_head(video: Path, style: str = "talking-head-default", name: str | N
     job.mkdir(parents=True, exist_ok=True)
     info = analyze.probe(video)
     ws = analyze.words(video, job / "words.json")
-    st = plan.STYLES[style]
+    st = plan.get_style(style)
     segs = analyze.speech_segments(ws, st["max_gap"], st["pad"], duration=info["duration"])
     edl = plan.plan_talking_head(str(video), info, ws, segs, style)
     v = _next_version(job)

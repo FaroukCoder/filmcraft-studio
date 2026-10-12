@@ -51,3 +51,21 @@ pv = virality.score({"segments": [{"start": 0, "src_in": 0, "src_out": 5, "zoom"
                                   {"start": 5, "src_in": 6, "src_out": 10, "zoom": 1.0}], "captions": []})
 assert pv["items"]["pacing"]["why"].startswith("1.1 changes/10s"), pv["items"]["pacing"]
 print("ok")
+
+# style packs: fast, upper-case, low-caption references -> tight cuts, caps, bottom anchor
+from studio import reference  # noqa: E402
+fast = {"cuts_per_10s": 6, "median_shot": 1.2, "words_per_second": 3, "brightness": 90, "saturation": 30,
+        "caption_frames": 0.9, "words_per_caption": 2, "uppercase": 0.9, "caption_y": 0.8}
+st = reference.to_style([fast, {**fast, "cuts_per_10s": 5}])
+assert st["max_gap"] == 0.25 and st["uppercase"] and st["words_per_caption"] == 2
+assert st["caption_style"]["anchor"] == "bottom" and st["punch_in"] == 1.15
+slow = reference.to_style([{**fast, "cuts_per_10s": 1, "uppercase": 0.1, "caption_y": 0.5}])
+assert slow["max_gap"] == 0.5 and not slow["uppercase"] and slow["caption_style"]["anchor"] == "middle"
+print("ok")
+
+# pace from the pauses the references left in: tight editors -> tight max_gap (clamped 0.15-0.6)
+ws_tight = [W(f"w{i}", i * 0.3, i * 0.3 + 0.25) for i in range(20)]  # 0.05 s gaps
+assert reference.p90_word_gap(ws_tight) == 0.05
+assert reference.to_style([{**fast, "p90_word_gap": 0.05}])["max_gap"] == 0.15
+assert reference.to_style([{**fast, "p90_word_gap": 0.3, "cuts_per_10s": 1}])["max_gap"] == 0.4
+print("ok")

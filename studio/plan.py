@@ -21,6 +21,17 @@ STYLES = {
 }
 
 
+def get_style(name: str) -> dict:
+    """A built-in style, else a style pack from the vault (Styles/<name>.md)."""
+    if name in STYLES:
+        return STYLES[name]
+    from .reference import load_pack
+    pack = load_pack(name)
+    if pack is None:
+        raise KeyError(f"unknown style {name!r}: not built in and no Styles/{name}.md in the vault")
+    return pack
+
+
 def base_scale(src_w: int, src_h: int, out_w: int = 1080, out_h: int = 1920) -> float:
     """Motion scale (%) that fills the vertical frame (centre crop) from any source shape."""
     return round(max(out_w / src_w, out_h / src_h) * 100, 2)
@@ -58,7 +69,7 @@ def frame_snap(caps: list[dict], fps: float) -> list[dict]:
 
 def plan_talking_head(source: str, info: dict, ws: list[dict], segments: list[tuple[float, float]],
                       style: str = "talking-head-default") -> dict:
-    st = STYLES[style]
+    st = get_style(style)
     segs, t, zoomed = [], 0.0, False
     for a, b in segments:
         if b - a >= st["min_zoom_len"]:
