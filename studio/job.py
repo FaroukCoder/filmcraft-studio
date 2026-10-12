@@ -67,7 +67,10 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None) -> 
         edl = {"version": 1, "kind": "dj-drop", "camera": str(camera), "audio": str(audio),
                "size": [1080, 1920], "fps": 30, "moment": m, "sync": {"offset": offset, "confidence": conf},
                "cam_in": round(m["start"] - offset, 4), "audio_in": m["start"],
-               "duration": round(m["end"] - m["start"], 4), "title": "TRACK ID?",
+               "duration": round(m["end"] - m["start"], 4),
+               # the animated TRACK ID? stamp slams in exactly on the drop
+               "graphics": [{"template": "track-id", "params": {"text": "TRACK ID?"},
+                             "start": round(m["at"] - m["start"], 3), "duration": 2.5, "track": "V2"}],
                "base_scale": plan.base_scale(cam_info["width"], cam_info["height"]),
                "segments": [{"start": 0, "src_in": 0, "src_out": round(m["end"] - m["start"], 4), "zoom": 1.0}],
                "captions": [{"start": 0.0, "end": round(m["end"] - m["start"], 4), "text": "TRACK ID?"}]}

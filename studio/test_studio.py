@@ -69,3 +69,12 @@ assert reference.p90_word_gap(ws_tight) == 0.05
 assert reference.to_style([{**fast, "p90_word_gap": 0.05}])["max_gap"] == 0.15
 assert reference.to_style([{**fast, "p90_word_gap": 0.3, "cuts_per_10s": 1}])["max_gap"] == 0.4
 print("ok")
+
+# motion-graphics templates: text is HTML-escaped, words staggered, background transparent
+from studio import mograph  # noqa: E402
+h = mograph.template_html("kinetic-title", text="A <b> C", accent="#ff0000")
+assert "&lt;b&gt;" in h and "<b>" not in h.split("<body>")[1]
+assert h.count('class="w"') == 3 and "animation-delay:0.28s" in h
+assert "background:transparent" in h and "#ff0000" in h
+assert "TRACK ID?" in mograph.template_html("track-id", text="TRACK ID?")
+print("ok")

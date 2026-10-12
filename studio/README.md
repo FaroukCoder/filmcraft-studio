@@ -29,7 +29,7 @@ Each run writes `edl.vN.json`, `project.vN.fcproj`, `render.vN.mp4` and `report.
 - Text is positioned by its alignment point: set `align: center` to centre it.
 - Export with `--gpu-rendering off` while the GPU is unstable under sustained load.
 
-Requirements for now: the `E:\AI\reels\.venv` interpreter (faster-whisper, numpy) and the FilmCraft 0.6.0 CLI (`FILMCRAFT_CLI` overrides its path).
+Requirements: the studio venv `E:\AI\filmcraft\.venv` and the FilmCraft 0.6.0 CLI (`FILMCRAFT_CLI` overrides its path). The venv has numpy, faster-whisper, rapidocr-onnxruntime and playwright; playwright drives the Edge that ships with Windows.
 
 ## DJ set (P2 core)
 
@@ -48,3 +48,10 @@ python -m studio.test_dj                                       # synthetic-techn
 4. `build.build_dj`: camera picture (video only) + clean audio (synced to 0.1 ms) + "TRACK ID?" hook, then CPU export.
 
 Not yet: mix transitions, crowd/hands-on moments (vision, needs the GPU), real track IDs (whatstheID).
+
+## Motion graphics (P4, first slice)
+
+`mograph.py` renders HTML/CSS animation to transparent PNG frames in headless Edge, stepping the page's animations frame by frame so renders are exact. Then it places them as an image sequence on V2/V3 (FilmCraft composites the alpha).
+- Built-in templates: `kinetic-title`, `lower-third`, `track-id`.
+- An EDL `"graphics"` entry can name a template or carry its own `"html"` (for LLM/Claude-written graphics). The contract: CSS animations or `window.seek(seconds)`, with a transparent background.
+- DJ clips use `track-id`, which slams in exactly on the drop.

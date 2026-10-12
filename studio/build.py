@@ -34,6 +34,18 @@ def build(edl: dict, project: Path) -> dict:
             "duration": seq["duration"] / 254_016_000_000}
 
 
+def place_graphics(fc, edl: dict, project: Path) -> None:
+    """EDL "graphics": [{"template", "params", "start", "duration", "track"}] -> code motion
+    graphics rendered to transparent frames (next to the project) and placed on their track."""
+    from . import mograph
+    for n, g in enumerate(edl.get("graphics", []), 1):
+        frames = project.parent / f"{project.stem}.gfx{n}"
+        html = g["html"] if "html" in g else mograph.template_html(g["template"], tuple(edl["size"]),
+                                                                   **g.get("params", {}))
+        mograph.render(html, frames, g["duration"], edl["fps"], tuple(edl["size"]))
+        mograph.place(fc, frames, g["start"], g.get("track", "V2"))
+
+
 def build_dj(edl: dict, project: Path) -> dict:
     """A DJ moment: the camera's picture (no sound) over the clean recording's audio, synced,
     with a hook title. EDL: {"camera", "audio", "cam_in", "audio_in", "duration", "title", ...}."""
@@ -47,10 +59,11 @@ def build_dj(edl: dict, project: Path) -> dict:
                value=edl["base_scale"])
         fc.run("timeline.place", item=aud, track="A1", time=0, sourceIn=ticks(edl["audio_in"]),
                duration=ticks(edl["duration"]))  # an audio track as `track`: the sound alone
-        if edl.get("title"):
+        if edl.get("title"):  # a static FilmCraft title (graphics below are the animated kind)
             fc.run("graphics.newText", text=edl["title"], position=[w // 2, round(h * 0.2)], size=120,
                    seconds=edl["duration"], time=0, newClip=True)
             fc.run("graphics.set", props={"align": "center", "font_style": "Bold"})
+        place_graphics(fc, edl, project)
         fc.run("file.saveAs", path=str(project))
         seq = fc.sequence()
     return {"clips": sum(len(t["items"]) for t in seq["video"]), "duration": seq["duration"] / TICKS}
