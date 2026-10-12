@@ -30,3 +30,21 @@ Each run writes `edl.vN.json`, `project.vN.fcproj`, `render.vN.mp4` and `report.
 - Export with `--gpu-rendering off` while the GPU is unstable under sustained load.
 
 Requirements for now: the `E:\AI\reels\.venv` interpreter (faster-whisper, numpy) and the FilmCraft 0.6.0 CLI (`FILMCRAFT_CLI` overrides its path).
+
+## DJ set (P2 core)
+
+```
+python -m studio.job dj <camera.mp4> <serato-recording.wav>   # -> the filmed drops as clips
+python -m studio.test_dj                                       # synthetic-techno ground truth
+```
+
+1. `dj.sync_offset` aligns the camera's room-mic audio with the clean recording.
+   - Coarse: onset envelopes.
+   - Fine: raw waveform within ±0.3 s.
+   - Confidence is a z-score, because techno repeats every beat.
+   - Synthetic test: exact to 5 ms, confidence 15–21.
+2. `dj.find_drops` finds where the bass returns after a breakdown: the contrast of the mean low-band level 8 s before vs 3 s after, pinned to the first kick back. Synthetic set: 6/6 drops within 0.55 s.
+3. `dj.moments`: each drop with 4 bars of build-up and 8 bars of payoff, on the local bar grid (BPM from onset autocorrelation).
+4. `build.build_dj`: camera picture (video only) + clean audio (synced to 0.1 ms) + "TRACK ID?" hook, then CPU export.
+
+Not yet: mix transitions, crowd/hands-on moments (vision, needs the GPU), real track IDs (whatstheID).

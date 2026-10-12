@@ -34,6 +34,28 @@ def build(edl: dict, project: Path) -> dict:
             "duration": seq["duration"] / 254_016_000_000}
 
 
+def build_dj(edl: dict, project: Path) -> dict:
+    """A DJ moment: the camera's picture (no sound) over the clean recording's audio, synced,
+    with a hook title. EDL: {"camera", "audio", "cam_in", "audio_in", "duration", "title", ...}."""
+    w, h = edl["size"]
+    with Session() as fc:
+        fc.run("file.newSequence", name=project.stem, width=w, height=h, fps=edl["fps"])
+        cam, aud = fc.run("file.import", paths=[edl["camera"], edl["audio"]])["items"][:2]
+        clips = fc.run("timeline.place", item=cam, track="V1", time=0, sourceIn=ticks(edl["cam_in"]),
+                       duration=ticks(edl["duration"]), audio=False)
+        fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="scale",
+               value=edl["base_scale"])
+        fc.run("timeline.place", item=aud, track="A1", time=0, sourceIn=ticks(edl["audio_in"]),
+               duration=ticks(edl["duration"]))  # an audio track as `track`: the sound alone
+        if edl.get("title"):
+            fc.run("graphics.newText", text=edl["title"], position=[w // 2, round(h * 0.2)], size=120,
+                   seconds=edl["duration"], time=0, newClip=True)
+            fc.run("graphics.set", props={"align": "center", "font_style": "Bold"})
+        fc.run("file.saveAs", path=str(project))
+        seq = fc.sequence()
+    return {"clips": sum(len(t["items"]) for t in seq["video"]), "duration": seq["duration"] / TICKS}
+
+
 def export(project: Path, out: Path) -> None:
     """H.264, burned captions, loudness normalised to -14 LUFS (the social-platform target),
     CPU rendering (the GPU is unstable under sustained load)."""

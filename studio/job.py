@@ -1,6 +1,7 @@
 """Studio jobs: raw footage in -> versioned edits out. Nothing is ever overwritten.
 
     python -m studio.job talking-head <video> [--style talking-head-default]
+    python -m studio.job dj <camera.mp4> <serato-recording.wav>
 
 Job folder (E:/AI/studio-jobs/<name>/): analysis cache, edl.v<N>.json, project.v<N>.fcproj,
 render.v<N>.mp4, report.v<N>.json."""
@@ -47,8 +48,47 @@ def talking_head(video: Path, style: str = "talking-head-default", name: str | N
     return report
 
 
+def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None) -> dict:
+    """Camera video + clean Serato recording -> the best drop moments, each its own clip:
+    synced picture, clean sound, a "TRACK ID?" hook. Moments the camera didn't film are skipped."""
+    from . import dj
+    t0 = time.time()
+    job = JOBS / (name or re.sub(r"[^\w-]", "_", camera.stem))
+    job.mkdir(parents=True, exist_ok=True)
+    cam_info = analyze.probe(camera)
+    clean = dj.load_audio(audio)
+    offset, conf = dj.sync_offset(clean, dj.load_audio(camera))
+    if conf < 8:
+        raise RuntimeError(f"camera/recording sync is unreliable (confidence {conf}); is this the same set?")
+    filmed = [m for m in dj.moments(clean, top=top * 3)
+              if m["start"] >= offset and m["end"] <= offset + cam_info["duration"]][:top]
+    v, renders = _next_version(job), []
+    for n, m in enumerate(filmed, 1):
+        edl = {"version": 1, "kind": "dj-drop", "camera": str(camera), "audio": str(audio),
+               "size": [1080, 1920], "fps": 30, "moment": m, "sync": {"offset": offset, "confidence": conf},
+               "cam_in": round(m["start"] - offset, 4), "audio_in": m["start"],
+               "duration": round(m["end"] - m["start"], 4), "title": "TRACK ID?",
+               "base_scale": plan.base_scale(cam_info["width"], cam_info["height"]),
+               "segments": [{"start": 0, "src_in": 0, "src_out": round(m["end"] - m["start"], 4), "zoom": 1.0}],
+               "captions": [{"start": 0.0, "end": round(m["end"] - m["start"], 4), "text": "TRACK ID?"}]}
+        stem = f"drop{n}.v{v}"
+        (job / f"edl.{stem}.json").write_text(json.dumps(edl, indent=1), encoding="utf-8")
+        build.build_dj(edl, job / f"project.{stem}.fcproj")
+        build.export(job / f"project.{stem}.fcproj", job / f"render.{stem}.mp4")
+        renders.append({"render": str(job / f"render.{stem}.mp4"), "drop_at": m["at"], "bpm": m["bpm"],
+                        "score": m["score"], "virality": virality.score(edl, job / f"render.{stem}.mp4")["total"]})
+    (job / f"edl.v{v}.json").write_text(json.dumps({"moments": filmed}, indent=1), encoding="utf-8")
+    report = {"version": v, "camera": str(camera), "audio": str(audio), "sync_offset": offset,
+              "sync_confidence": conf, "clips": renders, "took_seconds": round(time.time() - t0, 1)}
+    (job / f"report.v{v}.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    return report
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 3 or sys.argv[1] != "talking-head":
+    if len(sys.argv) >= 3 and sys.argv[1] == "talking-head":
+        style = sys.argv[sys.argv.index("--style") + 1] if "--style" in sys.argv else "talking-head-default"
+        print(json.dumps(talking_head(Path(sys.argv[2]), style), indent=1))
+    elif len(sys.argv) >= 4 and sys.argv[1] == "dj":
+        print(json.dumps(dj_set(Path(sys.argv[2]), Path(sys.argv[3])), indent=1))
+    else:
         sys.exit(__doc__)
-    style = sys.argv[sys.argv.index("--style") + 1] if "--style" in sys.argv else "talking-head-default"
-    print(json.dumps(talking_head(Path(sys.argv[2]), style), indent=1))
