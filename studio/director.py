@@ -16,12 +16,11 @@ from . import llm
 from .plan import STAMPS
 
 N_VARIANTS = 3
-VARIANT = {"type": "object", "required": ["name", "tease_bars", "before_bars", "after_bars", "hook_text", "stamp"],
+VARIANT = {"type": "object", "required": ["name", "tease_bars", "before_bars", "after_bars", "stamp"],
            "properties": {"name": {"type": "string"},
                           "tease_bars": {"type": "integer", "enum": [0, 1, 2]},
                           "before_bars": {"type": "integer", "enum": [2, 4, 8]},
                           "after_bars": {"type": "integer", "enum": [4, 8, 16]},
-                          "hook_text": {"type": "string"},
                           "stamp": {"type": "string", "enum": list(STAMPS)}}}
 PLAN_SCHEMA = {"type": "object", "required": ["picks"], "properties": {"picks": {"type": "array", "items": {
     "type": "object", "required": ["moment", "why", "variants"],
@@ -42,16 +41,17 @@ drop moments and design {v} clearly different vertical clips of each.
 
 What makes these clips work: the payoff must land within the first 1.5 s (a "tease" of 1-2 bars of
 the drop at the start does this, then the clip cuts back to the build-up); the clip should loop
-cleanly; 15-45 s total; one short caption on screen the whole time (max 5 words, uppercase, a
-question or tease that makes people comment, e.g. "TRACK ID?", "WAIT FOR IT", "WHO MADE THIS?").
+cleanly; 15-45 s total. There are NO captions: the drop is the hook, and bait text ("TRACK ID?",
+"WAIT FOR IT") reads as cheap AI content in this scene (studio/direction/system/never.md).
+Variants differ in structure: how long the tease is, how much build-up, which graphic lands.
 Bigger breakdowns (break_s) and higher score mean a harder-hitting drop. Prefer moments whose
 tempo is "sure": an UNSURE tempo means the bar cuts may land off the beat.
 
 Menus (pick from these only):
 - tease_bars 0|1|2: bars of the drop shown first (0 = start straight on the build-up)
 - before_bars 2|4|8: build-up before the drop; after_bars 4|8|16: payoff after it
-- stamp: "track-id" (TRACK ID? slams in on the drop), "kinetic-title" (the caption words pop in on the
-  drop), "none"
+- stamp: "name" (the DJ's name lands once on the drop), "credit" (the real track title and artist,
+  small, lower left; only exists when the track is known: {track_known}), "none" (just the footage)
 One bar here lasts {bar:.2f} s at the set's tempo.
 
 Detected moments (index, drop time in the set, tempo, breakdown length, score):
@@ -65,15 +65,15 @@ the left); frames left to right are taken at the times written under them. Measu
 {facts}
 
 Score each version 0-10 on: hook (does the first second grab: the drop or striking motion, readable
-caption), payoff_loop (does it deliver and would it loop cleanly), visual (framing on the DJ, caption
-legibility, graphics not covering the action). Give one concrete fix per version and name the best."""
+text if any), payoff_loop (does it deliver and would it loop cleanly), visual (framing on the DJ, the
+grade, text small and off the hands, nothing that looks like a stock template or bait caption). Give one concrete fix per version and name the best."""
 
 
 def rules_plan(moments: list[dict], n: int) -> dict:
     """No-LLM plan: the top-scoring moments, three proven variants each."""
-    variants = [{"name": "tease", "tease_bars": 1, "before_bars": 4, "after_bars": 8, "hook_text": "TRACK ID?", "stamp": "track-id"},
-                {"name": "build-up", "tease_bars": 0, "before_bars": 4, "after_bars": 8, "hook_text": "WAIT FOR IT", "stamp": "kinetic-title"},
-                {"name": "short-punch", "tease_bars": 2, "before_bars": 2, "after_bars": 8, "hook_text": "TRACK ID?", "stamp": "track-id"}]
+    variants = [{"name": "tease", "tease_bars": 1, "before_bars": 4, "after_bars": 8, "stamp": "name"},
+                {"name": "build-up", "tease_bars": 0, "before_bars": 4, "after_bars": 8, "stamp": "credit"},
+                {"name": "short-punch", "tease_bars": 2, "before_bars": 2, "after_bars": 8, "stamp": "none"}]
     picks = sorted(range(len(moments)), key=lambda i: (not moments[i].get("bpm_sure", True), -moments[i]["score"]))[:n]
     return {"picks": [{"moment": i, "why": "highest drop score with a sure tempo", "variants": variants} for i in picks]}
 
@@ -87,7 +87,6 @@ def _clean(plan: dict, moments: list[dict], n: int) -> list[dict]:
         seen.add(p["moment"])
         names = set()
         for k, v in enumerate(p["variants"][:N_VARIANTS]):
-            v["hook_text"] = " ".join(v["hook_text"].upper().split()[:5])
             v["name"] = "".join(c if c.isalnum() else "-" for c in v["name"].lower()).strip("-")[:24] or f"v{k + 1}"
             if v["name"] in names:
                 v["name"] += f"-{k + 1}"
@@ -96,7 +95,7 @@ def _clean(plan: dict, moments: list[dict], n: int) -> list[dict]:
     return out[:n]
 
 
-def plan_dj(moments: list[dict], n: int = 3, provider: str | None = None) -> dict:
+def plan_dj(moments: list[dict], n: int = 3, provider: str | None = None, track_known: bool = False) -> dict:
     """{"picks": [...], "provider", "model"}; falls back to the rules plan if the LLM fails."""
     if not moments:
         return {"picks": [], "provider": "rules", "model": None}
@@ -107,7 +106,7 @@ def plan_dj(moments: list[dict], n: int = 3, provider: str | None = None) -> dic
                       f"({'sure' if m.get('bpm_sure', True) else 'UNSURE'}), break_s {m.get('break', 0)}, "
                       f"score {m['score']}" for i, m in enumerate(moments))
     try:
-        r = llm.ask(PLAN_PROMPT.format(n=n, v=N_VARIANTS, bar=bar, table=table), PLAN_SCHEMA, provider=provider)
+        r = llm.ask(PLAN_PROMPT.format(n=n, v=N_VARIANTS, bar=bar, table=table, track_known="yes" if track_known else "no"), PLAN_SCHEMA, provider=provider)
         picks = _clean(r["data"], moments, n)
         if picks:
             return {"picks": picks, "provider": r["provider"], "model": r["model"]}

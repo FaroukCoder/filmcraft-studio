@@ -1,0 +1,20 @@
+/* house: the owner's own channel (whatstheID identity, Desktop/whatstheID/DESIGN.md).
+   Violet carries structure, pink carries attention (once per video). Never green, never #fff. */
+@font-face { font-family: "Michroma"; src: url(fonts/Michroma-Regular.ttf); }
+@font-face { font-family: "JetBrains Mono"; src: url(fonts/JetBrainsMono[wght].ttf); font-weight: 100 800; }
+:root {
+  --ground: #04030a; --ink: #150c2c; --deep: #4b2f8f; --core: #a98cf0; --lilac: #c9b6ff;
+  --chrome: #efe9ff; --pink: #ff8fc6; --magenta: #a8339c;
+  --t-hi: #f2efff; --t-mid: #a89cd4; --t-dim: #8578b4;
+  --accent: var(--pink);
+  /* the field: violet from the top, a faint pink from the bottom-right, over the void */
+  --field: radial-gradient(120% 70% at 50% -10%, rgba(75,47,143,.55), transparent 60%),
+           radial-gradient(80% 50% at 100% 105%, rgba(168,51,156,.22), transparent 60%), #04030a;
+  --name-font: "Michroma", sans-serif;   /* anything that names a thing */
+  --body-font: "JetBrains Mono", monospace;
+  --name-track: .02em; --body-weight: 400;
+  --ease-land: cubic-bezier(.16,1,.3,1); --ease-leave: cubic-bezier(.5,0,.75,0);
+  --ease-move: cubic-bezier(.77,0,.175,1);
+  /* footage grade (ffmpeg, read by studio/mograph.pack_grade): cool shadows, lifted mids, fine grain */
+  --grade: "eq=gamma=1.12:contrast=1.06:saturation=1.05,colorbalance=bs=.05:bm=.02,noise=c0s=6:c0f=t";
+}

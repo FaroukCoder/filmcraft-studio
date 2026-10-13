@@ -1,7 +1,8 @@
 """Studio jobs: raw footage in -> versioned edits out. Nothing is ever overwritten.
 
     python -m studio.job talking-head <video> [--style talking-head-default]
-    python -m studio.job dj <camera.mp4> <serato-recording.wav> [--llm rules|local|claude]
+    python -m studio.job dj <camera.mp4> <serato-recording.wav> [--dj "name"] [--tracks tracks.json]
+                                                               [--pack club] [--llm rules|local|claude]
     python -m studio.job promo "<brief>" [--seconds 20] [--music bed.mp3] [--llm local|claude]
     python -m studio.job promo - --storyboard board.json [--music bed.mp3]
 
@@ -16,7 +17,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import analyze, build, llm, plan, qa, reframe, virality
+from . import analyze, build, llm, mograph, plan, qa, reframe, virality
 
 JOBS = Path(r"E:\AI\studio-jobs")
 
@@ -53,9 +54,18 @@ def talking_head(video: Path, style: str = "talking-head-default", name: str | N
     return report
 
 
-def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None, provider: str | None = None) -> dict:
+def playing(tracks: list[dict] | None, at: float) -> dict | None:
+    """The track playing at `at` s of the recording (the last one that started before it)."""
+    before = [t for t in tracks or [] if t["at"] <= at]
+    return max(before, key=lambda t: t["at"]) if before else None
+
+
+def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None, provider: str | None = None,
+           dj_name: str | None = None, tracks: list[dict] | None = None, pack: str = "club") -> dict:
     """Camera video + clean Serato recording -> the best drop moments, 3 variants each (synced
-    picture, clean sound, hook caption, drop graphic), judged and ranked. The director plans with
+    picture, clean sound, the DJ's name or the real track on the drop, the pack's grade), judged
+    and ranked. `tracks` = [{"at": s in the recording, "title", "artist"}] (what was playing from
+    `at` on); without it no credit is shown, never a guessed one. The director plans with
     `provider` (llm.PROVIDER by default; "rules" = no LLM). Unfilmed moments are skipped."""
     from . import director, dj
     t0 = time.time()
@@ -69,7 +79,7 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None, pro
     filmed = [m for m in dj.moments(clean, top=top * 3)
               if m["start"] >= offset and m["end"] <= offset + cam_info["duration"]]
     v = _next_version(job)
-    direction = director.plan_dj(filmed, n=top, provider=provider)
+    direction = director.plan_dj(filmed, n=top, provider=provider, track_known=bool(tracks))
     crop = plan.crop_fraction(cam_info["width"], cam_info["height"])
     clips = []
     for n, pick in enumerate(direction["picks"], 1):
@@ -79,7 +89,8 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None, pro
         facts, rows = {}, []
         for var in pick["variants"]:
             edl = plan.plan_dj_clip(m, offset, str(camera), str(audio), cam_info, var["tease_bars"],
-                                    var["before_bars"], var["after_bars"], var["hook_text"], var["stamp"])
+                                    var["before_bars"], var["after_bars"], var["stamp"], dj_name,
+                                    playing(tracks, m["at"]), pack)
             if any(p["cam_in"] < 0 or p["cam_in"] + p["duration"] > cam_info["duration"] for p in edl["parts"]):
                 continue  # this cut reaches past what the camera filmed
             edl.update(sync={"offset": offset, "confidence": conf}, variant=var)
@@ -90,7 +101,7 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None, pro
             (job / f"edl.{stem}.json").write_text(json.dumps(edl, indent=1), encoding="utf-8")
             build.build_dj(edl, job / f"project.{stem}.fcproj")
             render = job / f"render.{stem}.mp4"
-            build.export(job / f"project.{stem}.fcproj", render)
+            build.export(job / f"project.{stem}.fcproj", render, grade=mograph.pack_grade(pack))
             check = qa.check(render, edl, edl["duration"])
             facts[var["name"]] = {"render": str(render), "seconds": edl["duration"], "drop_at": edl["drop_at"],
                                   "rubric": virality.score(edl, render)["total"], "qa": check["problems"]}
@@ -115,7 +126,7 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None, pro
 
 
 def promo_video(brief: str | None = None, storyboard: Path | None = None, seconds: int = 20,
-                music: Path | None = None, name: str | None = None, provider: str | None = None) -> dict:
+                music: Path | None = None, name: str | None = None, provider: str | None = None, pack: str = "house") -> dict:
     """A motion-graphics video from a brief (the LLM writes the storyboard) or a storyboard file:
     render, QA, contact sheet, then the judge (when an LLM wrote it or `provider` is set)."""
     from . import director, promo
@@ -130,7 +141,7 @@ def promo_video(brief: str | None = None, storyboard: Path | None = None, second
     v = max([int(m[1]) for p in job.glob("board.v*.json") if (m := re.search(r"v(\d+)", p.name))], default=0) + 1
     (job / f"board.v{v}.json").write_text(json.dumps({"brief": brief, **board}, indent=1), encoding="utf-8")
     out = job / f"render.v{v}.mp4"
-    result = promo.render_video(board, out, music)
+    result = promo.render_video(board, out, music, pack)
     edl = {"size": [promo.W, promo.H], "fps": promo.FPS}
     check = qa.check(out, edl, result["seconds"])
     problems = check["problems"] + [f"text overflows: {t}" for t in result["overflow"]]
@@ -154,11 +165,13 @@ if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "talking-head":
         print(json.dumps(talking_head(Path(sys.argv[2]), flag("--style") or "talking-head-default"), indent=1))
     elif len(sys.argv) >= 4 and sys.argv[1] == "dj":
-        print(json.dumps(dj_set(Path(sys.argv[2]), Path(sys.argv[3]), provider=flag("--llm")), indent=1))
+        tracks = json.loads(Path(flag("--tracks")).read_text(encoding="utf-8")) if flag("--tracks") else None
+        print(json.dumps(dj_set(Path(sys.argv[2]), Path(sys.argv[3]), provider=flag("--llm"), dj_name=flag("--dj"),
+                                tracks=tracks, pack=flag("--pack") or "club"), indent=1))
     elif len(sys.argv) >= 3 and sys.argv[1] == "promo":
         board = Path(flag("--storyboard")) if flag("--storyboard") else None
         print(json.dumps(promo_video(None if board else sys.argv[2], board, int(flag("--seconds") or 20),
                                      Path(flag("--music")) if flag("--music") else None,
-                                     provider=flag("--llm")), indent=1))
+                                     provider=flag("--llm"), pack=flag("--pack") or "house"), indent=1))
     else:
         sys.exit(__doc__)

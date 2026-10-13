@@ -1,7 +1,8 @@
 """Renderer checks in real Edge: python -m studio.test_mograph
 1. A canvas ball driven by requestAnimationFrame + performance.now lands exactly where its own
    clock says on every frame (the virtual clock), and two renders are byte-identical.
-2. A CSS template still steps: the TRACK ID stamp is invisible at 0 s and fully in at 0.5 s."""
+2. A CSS template still steps: the DJ's name is on screen from frame 0 (it lands, it doesn't
+   fade in) and gone after it leaves."""
 import hashlib
 import tempfile
 from pathlib import Path
@@ -36,8 +37,8 @@ with tempfile.TemporaryDirectory() as tmp:
         runs.append(hashlib.md5(b"".join(f.read_bytes() for f in frames)).hexdigest())
     assert runs[0] == runs[1], "renders differ between runs"
 
-    stamp = mograph.render(mograph.template_html("track-id", (540, 960), text="ID?"), Path(tmp) / "stamp",
-                           duration=0.6, fps=10, size=(540, 960))
+    stamp = mograph.render(mograph.template_html("name", (540, 960), text="ID", out=1.0), Path(tmp) / "stamp",
+                           duration=1.5, fps=10, size=(540, 960))
     alpha = lambda p: Image.open(p).convert("RGBA").getchannel("A").getextrema()[1]  # noqa: E731
-    assert alpha(stamp[0]) == 0 and alpha(stamp[5]) == 255
+    assert alpha(stamp[0]) > 0 and alpha(stamp[6]) == 255 and alpha(stamp[14]) == 0
 print("ok")

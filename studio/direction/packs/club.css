@@ -1,0 +1,15 @@
+/* club: the default for a DJ client until they give us their own logo, type and references.
+   Footage first, text small and real. One family (Archivo): width carries the contrast, wide for
+   the DJ's name, normal for the track credit. Neutral ink, no accent hue. */
+@font-face { font-family: "Archivo"; src: url(fonts/Archivo[wdth,wght].ttf); font-weight: 100 900; font-stretch: 62% 125%; }
+:root {
+  --ink: #ecebe6; --ink-dim: rgba(236,235,230,.72);
+  --shade: rgba(6,6,8,.62);               /* a soft local shade under text, never an outline */
+  --accent: var(--ink);
+  --name-font: "Archivo", sans-serif; --name-stretch: 125%; --name-weight: 640; --name-track: -.01em;
+  --body-font: "Archivo", sans-serif; --body-stretch: 100%; --body-weight: 440;
+  --ease-land: cubic-bezier(.16,1,.3,1); --ease-leave: cubic-bezier(.5,0,.75,0);
+  --ease-move: cubic-bezier(.77,0,.175,1);
+  /* club footage is dark and muddy: lift the mids, a touch of contrast and colour, grain you feel */
+  --grade: "eq=gamma=1.18:contrast=1.07:saturation=1.12,noise=c0s=7:c0f=t";
+}

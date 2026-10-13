@@ -72,11 +72,13 @@ print("ok")
 
 # motion-graphics templates: text is HTML-escaped, words staggered, background transparent
 from studio import mograph  # noqa: E402
-h = mograph.template_html("kinetic-title", text="A <b> C", accent="#ff0000")
-assert "&lt;b&gt;" in h and "<b>" not in h.split("<body>")[1]
-assert h.count('class="w"') == 3 and "animation-delay:0.28s" in h
-assert "background:transparent" in h and "#ff0000" in h
-assert "TRACK ID?" in mograph.template_html("track-id", text="TRACK ID?")
+h = mograph.template_html("kinetic-title", text="A <b> C")
+assert "&lt;b&gt;" in h and "<b>" not in h.split("<body>")[1].split("<script>")[0]
+assert h.count('class="mask"') == 3 and "animation-delay:0.167s" in h  # uneven onsets: 0, 3, 5 frames
+assert "background:transparent" in h and "Archivo" in h and "file:///" in h  # club pack, local fonts
+assert "uppercase" not in h and "michroma" in mograph.template_html("name", text="x", pack="house").lower()
+assert mograph.template_html("name", text="Sara Landry").count("sara landry") == 1  # lowercase name
+assert mograph.pack_grade("club").startswith("eq=") and mograph.pack_grade("house")
 print("ok")
 
 # reframe: the virtual camera holds inside the deadzone, eases toward a drifting face, cuts on a
@@ -109,15 +111,17 @@ assert d["true_peak"] == -0.4 and qa.parse("    Peak:       -inf dBFS")["true_pe
 print("ok")
 
 # DJ clip: a one-bar flash-forward of the drop opens the clip, then the build-up plays through;
-# cuts on bar lines, the TRACK ID stamp still lands on the real drop, the rubric hook is the drop
+# cuts on bar lines, the DJ's name lands on the real drop, the camera snaps there and at 0 (the tease
+# opens on the drop), the rubric hook is the drop
 m = {"start": 100.0, "at": 107.5, "end": 122.5, "bpm": 128.0}  # 4 bars before, 8 after at 128 BPM
 cam = {"width": 1920, "height": 1080}
-e = plan.plan_dj_clip(m, offset=40.0, camera="c.mp4", audio="a.wav", cam_info=cam)
+e = plan.plan_dj_clip(m, offset=40.0, camera="c.mp4", audio="a.wav", cam_info=cam, dj="Sara Landry")
 bar = 4 * 60 / 128
 assert e["tease"] == round(bar, 4) and e["drop_at"] == 0.0
 assert e["parts"][0] == {"start": 0.0, "audio_in": 107.5, "cam_in": 67.5, "duration": round(bar, 4)}
 assert e["parts"][1]["start"] == e["tease"] and e["parts"][1]["audio_in"] == 100.0 and e["parts"][1]["cam_in"] == 60.0
 assert e["graphics"][0]["start"] == round(bar + 7.5, 3) and e["duration"] == round(bar + 22.5, 4)
+assert e["graphics"][0]["template"] == "name" and e["snaps"] == [0.0, round(bar + 7.5, 3)] and e["captions"] == []
 assert virality.score(e)["items"]["hook"]["score"] == 10
 plain = plan.plan_dj_clip(m, 40.0, "c.mp4", "a.wav", cam, tease_bars=0)
 assert len(plain["parts"]) == 1 and plain["drop_at"] == 7.5 and virality.score(plain)["items"]["hook"]["score"] == 0
@@ -128,17 +132,17 @@ print("ok")
 from studio import director, llm  # noqa: E402
 moms = [{"at": 100.0, "bpm": 145.0, "score": 3.0, "break": 16.0, "start": 93.4, "end": 113.2},
         {"at": 300.0, "bpm": 145.0, "score": 9.0, "break": 30.0, "start": 293.4, "end": 313.2}]
-V = lambda name, cap="track id?": {"name": name, "tease_bars": 1, "before_bars": 4, "after_bars": 8,  # noqa: E731
-                                   "hook_text": cap, "stamp": "track-id"}
+V = lambda name, stamp="name": {"name": name, "tease_bars": 1, "before_bars": 4, "after_bars": 8,  # noqa: E731
+                                "stamp": stamp}
 messy = {"picks": [{"moment": 7, "why": "x", "variants": [V("a"), V("b"), V("c")]},
-                   {"moment": 1, "why": "big", "variants": [V("Hard Hit!"), V("hard hit"), V("c", "this is a very long caption text")]},
+                   {"moment": 1, "why": "big", "variants": [V("Hard Hit!"), V("hard hit"), V("c", "none")]},
                    {"moment": 1, "why": "dup", "variants": [V("a"), V("b"), V("c")]}]}
 real_ask = llm.ask
 llm.ask = lambda *a, **k: {"data": messy, "provider": "local", "model": "fake"}
 d = director.plan_dj(moms, n=3, provider="local")
 assert [p["moment"] for p in d["picks"]] == [1] and d["model"] == "fake"
 names = [v["name"] for v in d["picks"][0]["variants"]]
-assert names == ["hard-hit", "hard-hit-2", "c"] and d["picks"][0]["variants"][2]["hook_text"] == "THIS IS A VERY LONG"
+assert names == ["hard-hit", "hard-hit-2", "c"] and d["picks"][0]["variants"][2]["stamp"] == "none"
 def boom(*a, **k):
     raise llm.LLMError("Not logged in")
 llm.ask = boom
@@ -150,21 +154,20 @@ r = director.rank({"a": {"rubric": 9.0, "qa": ["silence 0-2s"]}, "b": {"rubric":
                   {"scores": {"b": {"hook": 9, "payoff_loop": 9, "visual": 9, "fix": "-"},
                               "c": {"hook": 5, "payoff_loop": 5, "visual": 5, "fix": "tighter"}}})
 assert [x["name"] for x in r] == ["b", "c", "a"] and r[0]["total"] == 7.5
-# variant options: re-cut around the drop, custom caption, no stamp
-e2 = plan.plan_dj_clip(m, 40.0, "c.mp4", "a.wav", cam, tease_bars=0, before_bars=2, after_bars=16,
-                       hook_text="WAIT FOR IT", stamp="none")
+# variant options: re-cut around the drop; a credit only for a known track (never guessed)
+e2 = plan.plan_dj_clip(m, 40.0, "c.mp4", "a.wav", cam, tease_bars=0, before_bars=2, after_bars=16, stamp="credit")
 assert e2["parts"][0]["audio_in"] == round(107.5 - 2 * bar, 3) and e2["duration"] == round(18 * bar, 3)
-assert e2["graphics"] == [] and e2["captions"][0]["text"] == "WAIT FOR IT" and e2["drop_at"] == round(2 * bar, 3)
+assert e2["graphics"] == [] and e2["captions"] == [] and e2["drop_at"] == round(2 * bar, 3)
+e3 = plan.plan_dj_clip(m, 40.0, "c.mp4", "a.wav", cam, stamp="credit", track={"title": "Hypnotize", "artist": "X"})
+assert e3["graphics"][0]["params"] == {"text": "Hypnotize", "sub": "X"}
+from studio import job, build  # noqa: E402
+assert job.playing([{"at": 0, "title": "a"}, {"at": 100, "title": "b"}], 107.5)["title"] == "b"
+assert job.playing(None, 5) is None
+k = build.snap_keys(2.0, 100.0, 30, 10.0)
+assert k[0] == (round(2 - 1 / 30, 4), 100.0) and k[1] == (2.0, 107.0) and abs(k[-1][1] - 102.0) < 0.01
 print("ok")
 
-# DJ hook caption: on screen from 0 until the drop stamp takes over (never both at once); no stamp
-# -> the whole clip; the caption style keeps it at the top
-cap = e["captions"][0]
-assert cap["start"] == 0.0 and cap["end"] == e["graphics"][0]["start"] and e["caption_style"]["anchor"] == "top"
-assert e2["captions"][0]["end"] == e2["duration"]
-print("ok")
-
-# rubric for DJ clips: a hook caption from the start scores full marks; words/s isn't judged
+# rubric for DJ clips: captions, comment bait and words/s aren't judged (the drop is the hook)
 dv = virality.score(e)
-assert dv["items"]["captions"]["score"] == 10 and dv["items"]["text_density"]["score"] is None
+assert dv["items"]["captions"]["score"] is None and dv["items"]["comment_trigger"]["score"] is None
 print("ok")

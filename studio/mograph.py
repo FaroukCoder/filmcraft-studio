@@ -9,65 +9,111 @@ page background transparent. Rendered in the Edge that ships with Windows (no do
 from __future__ import annotations
 
 import html as _html
+import re
 import shutil
 from pathlib import Path
 
-ACCENT = "#FFD400"  # visual identity is fluid (Q13): style packs will override this
+# Looks come from the direction folder (studio/direction/CLAUDE.md): packs/<name>.css holds the
+# fonts, colours, curves and footage grade; system/never.md and motion.md are the rules these
+# templates follow (words land whole out of masks, arrivals decelerate from oversize, exits
+# accelerate, nothing fades in, no caps, no accent word, no bounce).
+DIRECTION = Path(__file__).parent / "direction"
+PACK = "club"  # DJ clients' default; the owner's own channel uses "house"
 
-_BASE = """<!doctype html><html><head><meta charset="utf-8"><style>
+
+def pack_css(name: str = PACK) -> str:
+    """The pack's CSS with its font URLs made absolute (pages render from a temp folder)."""
+    css = (DIRECTION / "packs" / f"{name}.css").read_text(encoding="utf-8")
+    return css.replace("url(fonts/", "url(" + (DIRECTION / "fonts").as_uri() + "/")
+
+
+def pack_grade(name: str = PACK) -> str | None:
+    """The pack's ffmpeg footage grade (`--grade: "..."`), or None."""
+    m = re.search(r'--grade:\s*"([^"]+)"', pack_css(name))
+    return m[1] if m else None
+
+
+_BASE = """<!doctype html><html><head><meta charset="utf-8"><style>%(pack)s
 html,body{margin:0;width:%(w)spx;height:%(h)spx;background:transparent;overflow:hidden;
-  font-family:'Inter','Segoe UI',Arial,sans-serif}
-%(css)s</style></head><body>%(body)s</body></html>"""
+  font-family:var(--body-font);color:var(--ink,var(--t-hi))}
+.mask{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .04em .12em}
+.mask>span{display:inline-block}
+%(css)s</style></head><body>%(body)s
+<script>/* fit: a line never wider than its box (layout is time-independent, so frames stay exact) */
+document.fonts.ready.then(() => document.querySelectorAll('[data-fit]').forEach(el => {
+  const max = el.parentElement.clientWidth * +el.dataset.fit; let fs = parseFloat(getComputedStyle(el).fontSize);
+  while (el.scrollWidth > max && fs > 24) { fs *= .96; el.style.fontSize = fs + 'px'; } }));</script>
+</body></html>"""
+
+
+def _gaps(n: int, first: int = 3, rest: int = 2) -> list[int]:
+    """Uneven word onsets in frames (3,2,2,2...: motion.md), cumulative."""
+    out, f = [], 0
+    for i in range(n):
+        out.append(f)
+        f += first if i == 0 else rest
+    return out
+
+
+def _risen(words: list[str], fps: int, at: float, gaps: list[int], cls: str = "") -> str:
+    """Each word rises out of its own mask, landing on the ease-land curve."""
+    return "".join(f'<span class="mask"><span class="rise {cls}" style="animation-delay:{at + g / fps:.3f}s">'
+                   f'{_html.escape(w)}</span></span> ' for w, g in zip(words, gaps))
+
 
 TEMPLATES = {
-    # words pop in one by one, the last one in the accent colour
+    # the DJ's name lands once on the drop: from 2.2x oversize and blurred, decelerating (60-72 %
+    # of the travel in the first 5 frames), keeps shrinking while it holds, then leaves upward fast
+    "name": {
+        "css": """.nm{position:absolute;left:8%%;right:8%%;top:%(y)s%%;text-align:center}
+.nm b{display:inline-block;font:normal var(--name-weight,400) %(size)spx/1 var(--name-font);
+  font-stretch:var(--name-stretch,100%%);letter-spacing:var(--name-track,0);white-space:nowrap;
+  text-shadow:0 2px 16px var(--shade,rgba(4,3,10,.6)),0 0 48px var(--shade,rgba(4,3,10,.6));
+  animation:land .5s var(--ease-land) both, hold %(hold)ss linear .5s forwards, go .3s var(--ease-leave) %(out)ss forwards}
+@keyframes land{from{transform:scale(2.2);filter:blur(10px)}to{transform:scale(1);filter:blur(0)}}
+@keyframes hold{from{transform:scale(1)}to{transform:scale(.965) translateX(-1.2%%)}}
+@keyframes go{from{transform:scale(.965) translateX(-1.2%%);opacity:1}to{transform:scale(.9) translate(-1.2%%,-40%%);opacity:0}}""",
+        "body": lambda p: f'<div class="nm"><b data-fit=".9">{_html.escape(p["text"].lower())}</b></div>',
+        "defaults": {"y": 17, "size": 150, "out": 2.2},
+    },
+    # a real track credit, lower left, clear of the decks: title then artist rise out of masks,
+    # hold with a slow drift, then drop back into their masks (faster than they came)
+    "credit": {
+        "css": """.cr{position:absolute;left:7.5%%;right:16%%;top:%(y)s%%;font-family:var(--body-font);
+  font-weight:var(--body-weight,400);font-stretch:var(--body-stretch,100%%);text-shadow:0 0 28px var(--shade,rgba(4,3,10,.6));
+  animation:drift %(out)ss linear both}
+.cr .t{font-size:%(size)spx;line-height:1.1}
+.cr .a{font-size:calc(%(size)spx * .74);color:var(--ink-dim,var(--t-mid));line-height:1.2}
+.rise{animation:up .42s var(--ease-land) both, down .24s var(--ease-leave) %(out)ss forwards}
+@keyframes up{from{transform:translateY(105%%)}to{transform:none}}
+@keyframes down{from{transform:none}to{transform:translateY(105%%)}}
+@keyframes drift{from{transform:none}to{transform:translateX(1.5%%)}}""",
+        "body": lambda p: (f'<div class="cr"><div class="t">{_risen([p["text"]], 30, 0.0, [0])}</div>'
+                           + (f'<div class="a">{_risen([p["sub"]], 30, 0.0, [4])}</div>' if p.get("sub") else "")
+                           + "</div>"),
+        "defaults": {"y": 64, "size": 64, "out": 3.4},
+    },
+    # a short statement, word by word out of masks on uneven onsets, sentence case, one colour
     "kinetic-title": {
-        "css": """.t{position:absolute;left:0;right:0;top:%(y)s%%;text-align:center;font-weight:900;
-  font-size:%(size)spx;line-height:1.05;color:#fff;text-transform:uppercase;
-  text-shadow:0 6px 0 rgba(0,0,0,.55)}
-.w{display:inline-block;margin:0 .12em;opacity:0;transform:scale(.3) translateY(40px);
-  animation:pop .38s cubic-bezier(.2,1.6,.4,1) forwards}
-.w:last-child{color:%(accent)s}
-@keyframes pop{to{opacity:1;transform:scale(1) translateY(0)}}""",
-        "body": lambda p: '<div class="t">' + "".join(
-            f'<span class="w" style="animation-delay:{i * p["stagger"]:.2f}s">{_html.escape(w)}</span>'
-            for i, w in enumerate(p["text"].split())) + "</div>",
-        "defaults": {"y": 38, "size": 120, "stagger": 0.14},
-    },
-    # name + role on an accent bar that slides in, holds, slides out
-    "lower-third": {
-        "css": """.lt{position:absolute;left:60px;top:%(y)s%%;transform:translateX(-120%%);
-  animation:in .5s cubic-bezier(.2,.9,.3,1) forwards, out .45s ease-in %(out)ss forwards}
-.n{background:%(accent)s;color:#111;font-weight:900;font-size:64px;padding:14px 28px;display:inline-block}
-.r{background:rgba(0,0,0,.78);color:#fff;font-size:40px;padding:10px 28px;display:inline-block;margin-top:6px}
-@keyframes in{to{transform:translateX(0)}}
-@keyframes out{to{transform:translateX(-120%%)}}""",
-        "body": lambda p: f'<div class="lt"><div class="n">{_html.escape(p["text"])}</div><br>'
-                          f'<div class="r">{_html.escape(p.get("sub", ""))}</div></div>',
-        "defaults": {"y": 66, "out": 2.6},
-    },
-    # "TRACK ID?" stamp: slams in with a shake, accent underline sweeps across
-    "track-id": {
-        "css": """.s{position:absolute;left:0;right:0;top:%(y)s%%;text-align:center;font-weight:900;
-  font-size:%(size)spx;color:#fff;letter-spacing:.04em;text-shadow:0 0 28px rgba(0,0,0,.6);
-  transform:scale(2.4);opacity:0;animation:slam .28s cubic-bezier(.2,1.4,.4,1) forwards,
-  shake .5s linear .28s 1}
-.u{position:absolute;left:50%%;top:calc(%(y)s%% + %(size)spx * 1.25);height:14px;width:0;
-  transform:translateX(-50%%);background:%(accent)s;animation:sweep .45s ease-out .3s forwards}
-@keyframes slam{to{transform:scale(1);opacity:1}}
-@keyframes shake{20%%{transform:translate(-8px,4px)}40%%{transform:translate(7px,-5px)}
-  60%%{transform:translate(-5px,3px)}80%%{transform:translate(4px,-2px)}100%%{transform:none}}
-@keyframes sweep{to{width:62%%}}""",
-        "body": lambda p: f'<div class="s">{_html.escape(p["text"])}</div><div class="u"></div>',
-        "defaults": {"y": 16, "size": 130},
+        "css": """.kt{position:absolute;left:8%%;right:8%%;top:%(y)s%%;text-align:center;
+  font:normal 400 %(size)spx/1.08 var(--name-font);font-stretch:var(--name-stretch,100%%);
+  letter-spacing:var(--name-track,0);text-shadow:0 0 36px var(--shade,rgba(4,3,10,.6));
+  animation:drift %(out)ss linear both}
+.rise{animation:up .42s var(--ease-land) both, down .24s var(--ease-leave) %(out)ss forwards}
+@keyframes up{from{transform:translateY(105%%)}to{transform:none}}
+@keyframes down{from{transform:none}to{transform:translateY(-105%%)}}
+@keyframes drift{from{transform:none}to{transform:translateX(-2%%)}}""",
+        "body": lambda p: f'<div class="kt">{_risen(p["text"].split(), 30, 0.0, _gaps(len(p["text"].split())))}</div>',
+        "defaults": {"y": 38, "size": 96, "out": 2.4},
     },
 }
 
 
-def template_html(name: str, size: tuple[int, int] = (1080, 1920), accent: str = ACCENT, **params) -> str:
+def template_html(name: str, size: tuple[int, int] = (1080, 1920), pack: str = PACK, **params) -> str:
     t = TEMPLATES[name]
-    p = {**t["defaults"], **params, "accent": accent}
-    return _BASE % {"w": size[0], "h": size[1], "css": t["css"] % p, "body": t["body"](p)}
+    p = {**t["defaults"], **params}
+    p.setdefault("hold", max(0.1, p["out"] - 0.5))
+    return _BASE % {"w": size[0], "h": size[1], "pack": pack_css(pack), "css": t["css"] % p, "body": t["body"](p)}
 
 
 # Virtual clock, injected before the page's own scripts (the timeweb/timecut and Replit-renderer

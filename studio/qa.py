@@ -1,13 +1,19 @@
 """Post-render QA (after OpenMontage's self-review): a render is checked before anyone sees it.
 One ffmpeg pass: black frames, frozen picture, dead air, true peak; ffprobe: size, fps, length
 against the EDL; the caption style against Instagram's UI overlay. Problems make `ok` false and
-are listed in the version's report; the render is kept either way (nothing is overwritten)."""
+are listed in the version's report; the render is kept either way (nothing is overwritten).
+With the motionmaxxing skill installed, its look.py also scores the render (direction/system/
+review.md): gates G0/G2/G3 (a FAIL is a problem) and the motion band against human-made films."""
 from __future__ import annotations
 
 import json
 import re
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
+
+LOOK = Path.home() / ".claude" / "skills" / "motionmaxxing" / "scripts" / "look.py"
 
 BLACK_S, FREEZE_S, SILENCE_S = 0.5, 2.0, 1.5
 MAX_TRUE_PEAK = -1.0  # dBTP: platforms re-encode, hotter peaks clip
@@ -71,4 +77,23 @@ def check(render: Path, edl: dict, expected_seconds: float | None = None) -> dic
     cs = edl.get("caption_style") or {}
     if edl.get("captions") and cs.get("anchor") == "bottom" and cs.get("margin", 0) < IG_BOTTOM_UI:
         problems.append(f"captions sit under the Reels UI (bottom margin {cs.get('margin')} < {IG_BOTTOM_UI})")
-    return {"ok": not problems, "problems": problems, **p, "true_peak": d["true_peak"]}
+    look = gates(render, expected_seconds)
+    problems += [f"{g['id']} {g['name']}: {g['detail']}" for g in look.get("gates", []) if g["status"] == "FAIL"]
+    return {"ok": not problems, "problems": problems, **p, "true_peak": d["true_peak"], "look": look}
+
+
+def gates(render: Path, expected_seconds: float | None = None) -> dict:
+    """motionmaxxing look.py on the render: {"gates": [...], "motion": mean luma change per frame,
+    "human_band": {...}}; {} when the skill isn't installed or the script fails."""
+    if not LOOK.exists():
+        return {}
+    with tempfile.TemporaryDirectory() as tmp:
+        args = [sys.executable, str(LOOK), str(render), "--out", tmp]
+        if expected_seconds:
+            args += ["--expect", f"{expected_seconds:.2f}"]
+        r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        g = Path(tmp) / "gates.json"
+        if r.returncode not in (0, 1) or not g.exists():
+            return {}
+        j = json.loads(g.read_text(encoding="utf-8"))
+    return {"gates": j.get("gates", []), "motion": j.get("motion_mean_luma_diff"), "human_band": j.get("human_band")}

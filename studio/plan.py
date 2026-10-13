@@ -97,20 +97,20 @@ def plan_talking_head(source: str, info: dict, ws: list[dict], segments: list[tu
             "base_scale": base_scale(info["width"], info["height"])}
 
 
-STAMPS = ("track-id", "kinetic-title", "none")  # what slams in on the drop
-# DJ hook caption: top of frame (below the Reels top bar), bold, outlined for dark club footage
-DJ_CAPTION = {"font": "Inter", "size": 80, "color": "#ffffff", "background": False, "outline": 7.0,
-              "outlineColor": "#000000", "align": "center", "anchor": "top", "margin": 0.13}
+STAMPS = ("name", "credit", "none")  # what lands on the drop (direction/jobs/dj-clip.md)
+SNAP = 1.07  # camera snap on the drop: +7 % in one frame, settling over SNAP_FRAMES (motion.md)
 
 
 def plan_dj_clip(m: dict, offset: float, camera: str, audio: str, cam_info: dict,
                  tease_bars: int = 1, before_bars: int | None = None, after_bars: int | None = None,
-                 hook_text: str = "TRACK ID?", stamp: str = "track-id") -> dict:
+                 stamp: str = "name", dj: str | None = None, track: dict | None = None,
+                 pack: str = "club") -> dict:
     """EDL for one DJ moment (dj.moments: start, at = the drop, end, bpm), in parts that each place
     camera picture + clean audio. With `tease_bars`, the clip opens on that many bars of the drop
     (a flash-forward, so the payoff lands in the first second), then cuts back to the build-up.
     `before_bars`/`after_bars` re-cut the moment around the drop (default: the moment's own
-    span). `hook_text` is the on-screen caption; `stamp` the graphic on the drop (STAMPS).
+    span). `stamp` is the graphic on the drop (STAMPS): the DJ's `dj` name, or the real `track`
+    {"title", "artist"}; with neither it falls back to none. No bait captions: the drop is the hook.
     Both cuts sit on bar lines. Times: `audio_in` in the recording, `cam_in` in the camera file."""
     bar = 4 * 60 / m["bpm"]
     if before_bars is not None:
@@ -128,18 +128,23 @@ def plan_dj_clip(m: dict, offset: float, camera: str, audio: str, cam_info: dict
             "src_size": [cam_info["width"], cam_info["height"]], "size": [1080, 1920], "fps": 30,
             "parts": parts, "duration": total, "tease": tease,
             "drop_at": 0.0 if tease else drop_in_main,  # when the payoff first hits (rubric hook)
-            # the animated stamp slams in exactly on the (real) drop
-            "graphics": [] if stamp == "none" else [
-                {"template": stamp, "params": {"text": "TRACK ID?" if stamp == "track-id" else hook_text},
-                 "start": drop_in_main, "duration": 2.5, "track": "V2"}],
+            "graphics": _stamp(stamp, dj, track, drop_in_main),
+            "pack": pack, "snaps": sorted({0.0, drop_in_main} if tease else {drop_in_main}),
             "base_scale": base_scale(cam_info["width"], cam_info["height"]),
             "segments": [{"start": p["start"], "src_in": p["audio_in"],
                           "src_out": round(p["audio_in"] + p["duration"], 4), "zoom": 1.0} for p in parts],
-            # the hook caption holds the top of the frame until the drop graphic takes that spot
-            # (no "TRACK ID?" caption and "TRACK ID?" stamp on screen together)
-            "captions": [{"start": 0.0, "end": total if stamp == "none" else drop_in_main, "text": hook_text}]
-            if hook_text and (stamp == "none" or drop_in_main >= 1.0) else [],
-            "caption_style": DJ_CAPTION}
+            "captions": []}
+
+
+def _stamp(stamp: str, dj: str | None, track: dict | None, at: float) -> list[dict]:
+    """The one graphic on the drop. A credit only for a track we actually know."""
+    if stamp == "name" and dj:
+        return [{"template": "name", "params": {"text": dj}, "start": at, "duration": 2.6, "track": "V2"}]
+    if stamp == "credit" and track and track.get("title"):
+        return [{"template": "credit", "params": {"text": track["title"], "sub": track.get("artist", "")},
+                 "start": at + 0.4, "duration": 3.8, "track": "V2"}]
+    return []
+
 
 
 def crop_fraction(src_w: int, src_h: int, out_w: int = 1080, out_h: int = 1920) -> float | None:
