@@ -92,3 +92,38 @@ DJ clips used to open on 4 bars of build-up, so the drop only hit around 7 s in.
 
 `sh studio/verify_sync.sh` runs the self-checks, a talking-head job and a DJ job against the pinned FilmCraft and prints each render's QA. Run it after merging an upstream tag and moving `fc.CLI` to that release's portable build.
 - **2026-10-13: 0.6.0 → 0.7.2 (382 commits).** The command changes we use were all additive: `file.newSequence` `fromItems`, `timeline.place` `items`, keyframe `time` kept outside the clip, FLAC/EXR export options, and 7 new commands. Results matched 0.6.0.
+
+## AI director: planner + judge (`llm.py`, `director.py`)
+
+`llm.ask(prompt, schema, images, provider)` is the single entry point. Each call is recorded in the report with its provider and model.
+- **`local`:** Ollama (`coder-stable` for text, `qwen3-vl:8b` for images) under `gpu.lock`, with `yield_to_music=True`, so it waits while Serato DJ Pro or Ableton Live is open.
+- **`claude`:** `claude -p --json-schema`, run on the owner's subscription. The CLI must be logged in (`claude` → `/login`).
+- **`rules`:** no LLM at all.
+- `STUDIO_LLM` (or `--llm`) picks the provider.
+
+DJ job: `python -m studio.job dj <camera> <recording> [--llm rules|local|claude]`.
+- Detected drops go to the planner, which picks moments and designs 3 variants of each. Every choice comes from a menu the builder can execute: tease 0/1/2 bars, 2/4/8 bars before the drop, 4/8/16 after, a hook caption of ≤ 5 words, and the drop stamp.
+- Each variant is built, exported, QA'd and scored by the rubric.
+- A contact sheet goes to the LLM judge, which scores hook, payoff/loop and visual, and suggests one fix.
+- The ranking combines the rubric and the judge, half each; QA failures go last.
+- If the LLM fails, the job falls back to the rules plan and records the reason.
+
+## Sync and tempo on real music (`test_sync.py`)
+
+Benchmark: a public Boiler Room set, with the camera simulated as a phone mic (high-pass, low-pass, room reverb, AGC, noise).
+- **Coarse:** loudness at 20 Hz matched by Pearson correlation. Beat-level envelopes repeat every bar, and raw correlation favours the loudest stretch.
+- **Overlap:** the camera must lie at least 90% inside the recording. Edge overlaps spiked.
+- **Fine:** GCC-PHAT on the raw waveform, ±1.5 s around the coarse estimate.
+- **Confidence:** peak-to-sidelobe ratio. True matches score 24–122, other recordings ≤ 5, and pure synthetic loops about 11; the gate is 15.
+- **Result:** 10/10 sample-exact, in a normal room and a very wet one.
+- **Tempo:** the onset envelope runs at 11025/55 = 200.45 Hz, not 200. Range 115–165 BPM, with sub-sample refinement of the bar lag (8-bar drift ≤ 8 ms). Each drop is read 3 times; if the reads disagree by more than 1.5 BPM, the set tempo is used and `bpm_sure` is false.
+- **Drops:** the bass must stay back (median of the after-window), and the local level has a floor of ¼ of the set's median. Without it, a lone boom in the intro ranked first.
+
+## Motion-graphics videos (`promo.py`)
+
+`python -m studio.job promo "<brief>" [--seconds 20] [--music bed.m4a] [--llm ...]`, or `promo - --storyboard board.json`.
+- **Flow:** storyboard (LLM, or a file) → one HTML page with every scene on one CSS timeline → frame-exact render → H.264. Music gets fades and −14 LUFS.
+- **Scene types:** title, words, list, stat (a count-up via `@property`), image (Ken Burns), cta.
+- **Motion (animate skill):** transform, opacity and clip-path only; strong ease-out entrances, ease-in-out exits, 0.95 + fade (never scale 0).
+- **Text fit:** measured on resting layout boxes. Entrance poses and glyph ink beyond the line box would otherwise read as overflow.
+- **Capture:** JPEG for opaque videos, 3× faster than PNG (16.5 s of video renders in ~70 s).
