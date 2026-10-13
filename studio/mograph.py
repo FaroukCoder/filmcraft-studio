@@ -123,7 +123,8 @@ _STEP = """t => {
 
 
 def render(html: str, out_dir: Path, duration: float, fps: int = 30,
-           size: tuple[int, int] = (1080, 1920)) -> list[Path]:
+           size: tuple[int, int] = (1080, 1920), prepare: str | None = None,
+           info: dict | None = None, alpha: bool = True) -> list[Path]:
     """Step the page frame by frame on a virtual clock and screenshot each frame with alpha."""
     import tempfile
     from playwright.sync_api import sync_playwright
@@ -137,12 +138,20 @@ def render(html: str, out_dir: Path, duration: float, fps: int = 30,
         browser = pw.chromium.launch(channel="msedge")
         page = browser.new_page(viewport={"width": size[0], "height": size[1]})
         page.add_init_script(_CLOCK)
-        page.goto(page_file.as_uri())
+        page.goto(page_file.as_uri())  # waits for the load event, so images are in
         page.evaluate("document.fonts.ready")
+        if prepare:  # one-off layout work before frame 0 (e.g. fitting text); its result -> info
+            result = page.evaluate(prepare)
+            if info is not None:
+                info["prepare"] = result
         for i in range(round(duration * fps)):
             page.evaluate(_STEP, i / fps)
-            f = out_dir / f"f_{i:05d}.png"
-            page.screenshot(path=str(f), omit_background=True)
+            if alpha:  # overlays need transparency: PNG
+                f = out_dir / f"f_{i:05d}.png"
+                page.screenshot(path=str(f), omit_background=True)
+            else:  # opaque full-frame videos: JPEG q95 is ~2x faster to capture than PNG
+                f = out_dir / f"f_{i:05d}.jpg"
+                page.screenshot(path=str(f), type="jpeg", quality=95)
             frames.append(f)
         browser.close()
     return frames

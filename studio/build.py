@@ -22,20 +22,26 @@ def build(edl: dict, project: Path) -> dict:
             if "x" in s:  # follow the speaker in a wide source instead of a blind centre crop
                 fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="position",
                        value=[reframe.position_x(s["x"], edl["src_size"][0], scale, w), h / 2])
-        if edl["captions"]:
-            fc.run("captions.newTrack", format="Subtitle", name="Captions")
-            fc.run("captions.setStyle", track="C1", **edl["caption_style"])
-            fps = edl["fps"]
-            for c in edl["captions"]:
-                # frame-exact start in ticks (seconds like 4.8333 land a hair inside the previous
-                # caption -> "a caption already covers this time"); end 2 ms short of the boundary
-                f0, f1 = round(c["start"] * fps), round(c["end"] * fps)
-                fc.run("captions.add", track="C1", text=c["text"], time=f0 * TICKS // fps,
-                       durationSeconds=(f1 - f0) / fps - 0.002)
+        add_captions(fc, edl)
         fc.run("file.saveAs", path=str(project))
         seq = fc.sequence()
     return {"clips": sum(len(t["items"]) for t in seq["video"]), "captions": len(edl["captions"]),
             "duration": seq["duration"] / 254_016_000_000}
+
+
+def add_captions(fc, edl: dict) -> None:
+    """The EDL's captions on a burned-in caption track (C1), in its caption_style."""
+    if not edl.get("captions"):
+        return
+    fc.run("captions.newTrack", format="Subtitle", name="Captions")
+    fc.run("captions.setStyle", track="C1", **edl["caption_style"])
+    fps = edl["fps"]
+    for c in edl["captions"]:
+        # frame-exact start in ticks (seconds like 4.8333 land a hair inside the previous
+        # caption -> "a caption already covers this time"); end 2 ms short of the boundary
+        f0, f1 = round(c["start"] * fps), round(c["end"] * fps)
+        fc.run("captions.add", track="C1", text=c["text"], time=f0 * TICKS // fps,
+               durationSeconds=(f1 - f0) / fps - 0.002)
 
 
 def place_graphics(fc, edl: dict, project: Path) -> None:
@@ -73,6 +79,7 @@ def build_dj(edl: dict, project: Path) -> dict:
                    seconds=edl["duration"], time=0, newClip=True)
             fc.run("graphics.set", props={"align": "center", "font_style": "Bold"})
         place_graphics(fc, edl, project)
+        add_captions(fc, edl)  # the hook caption: on screen until the drop graphic takes over
         fc.run("file.saveAs", path=str(project))
         seq = fc.sequence()
     return {"clips": sum(len(t["items"]) for t in seq["video"]), "duration": seq["duration"] / TICKS}

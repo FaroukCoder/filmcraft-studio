@@ -68,6 +68,12 @@ def score(edl: dict, render: Path | None = None, platform: str = "instagram") ->
     wps = words / covered if covered else 0
     items["text_density"] = {"score": _band(wps, 1.5, 3.5, soft=2.5), "why": f"{wps:.1f} words/s on screen"}
 
+    if edl.get("kind") == "dj-drop":  # no speech: what counts is a hook caption up at once
+        early = bool(caps) and caps[0]["start"] <= 0.5
+        items["captions"] = {"score": 10.0 if early else 0.0,
+                             "why": f"hook caption from {caps[0]['start']:.1f}s" if caps else "no hook caption"}
+        items["text_density"] = {"score": None, "why": "not a speech edit"}
+
     items["payoff_loop"] = {"score": None, "why": "needs the LLM judge (ending leads back to the start)"}
     scored = [v["score"] for v in items.values() if v["score"] is not None]
     return {"total": round(sum(scored) / len(scored), 1) if scored else None, "platform": platform,

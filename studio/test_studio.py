@@ -122,3 +122,49 @@ assert virality.score(e)["items"]["hook"]["score"] == 10
 plain = plan.plan_dj_clip(m, 40.0, "c.mp4", "a.wav", cam, tease_bars=0)
 assert len(plain["parts"]) == 1 and plain["drop_at"] == 7.5 and virality.score(plain)["items"]["hook"]["score"] == 0
 print("ok")
+
+# director: an LLM plan is cleaned (bad index, duplicate moment, long caption, clashing names),
+# a failing LLM falls back to the rules plan, and the ranking puts QA failures last
+from studio import director, llm  # noqa: E402
+moms = [{"at": 100.0, "bpm": 145.0, "score": 3.0, "break": 16.0, "start": 93.4, "end": 113.2},
+        {"at": 300.0, "bpm": 145.0, "score": 9.0, "break": 30.0, "start": 293.4, "end": 313.2}]
+V = lambda name, cap="track id?": {"name": name, "tease_bars": 1, "before_bars": 4, "after_bars": 8,  # noqa: E731
+                                   "hook_text": cap, "stamp": "track-id"}
+messy = {"picks": [{"moment": 7, "why": "x", "variants": [V("a"), V("b"), V("c")]},
+                   {"moment": 1, "why": "big", "variants": [V("Hard Hit!"), V("hard hit"), V("c", "this is a very long caption text")]},
+                   {"moment": 1, "why": "dup", "variants": [V("a"), V("b"), V("c")]}]}
+real_ask = llm.ask
+llm.ask = lambda *a, **k: {"data": messy, "provider": "local", "model": "fake"}
+d = director.plan_dj(moms, n=3, provider="local")
+assert [p["moment"] for p in d["picks"]] == [1] and d["model"] == "fake"
+names = [v["name"] for v in d["picks"][0]["variants"]]
+assert names == ["hard-hit", "hard-hit-2", "c"] and d["picks"][0]["variants"][2]["hook_text"] == "THIS IS A VERY LONG"
+def boom(*a, **k):
+    raise llm.LLMError("Not logged in")
+llm.ask = boom
+fb = director.plan_dj(moms, n=1, provider="claude")
+assert fb["provider"] == "rules" and fb["picks"][0]["moment"] == 1 and "Not logged in" in fb["fallback_reason"]
+llm.ask = real_ask
+r = director.rank({"a": {"rubric": 9.0, "qa": ["silence 0-2s"]}, "b": {"rubric": 6.0, "qa": []},
+                   "c": {"rubric": 7.0, "qa": []}},
+                  {"scores": {"b": {"hook": 9, "payoff_loop": 9, "visual": 9, "fix": "-"},
+                              "c": {"hook": 5, "payoff_loop": 5, "visual": 5, "fix": "tighter"}}})
+assert [x["name"] for x in r] == ["b", "c", "a"] and r[0]["total"] == 7.5
+# variant options: re-cut around the drop, custom caption, no stamp
+e2 = plan.plan_dj_clip(m, 40.0, "c.mp4", "a.wav", cam, tease_bars=0, before_bars=2, after_bars=16,
+                       hook_text="WAIT FOR IT", stamp="none")
+assert e2["parts"][0]["audio_in"] == round(107.5 - 2 * bar, 3) and e2["duration"] == round(18 * bar, 3)
+assert e2["graphics"] == [] and e2["captions"][0]["text"] == "WAIT FOR IT" and e2["drop_at"] == round(2 * bar, 3)
+print("ok")
+
+# DJ hook caption: on screen from 0 until the drop stamp takes over (never both at once); no stamp
+# -> the whole clip; the caption style keeps it at the top
+cap = e["captions"][0]
+assert cap["start"] == 0.0 and cap["end"] == e["graphics"][0]["start"] and e["caption_style"]["anchor"] == "top"
+assert e2["captions"][0]["end"] == e2["duration"]
+print("ok")
+
+# rubric for DJ clips: a hook caption from the start scores full marks; words/s isn't judged
+dv = virality.score(e)
+assert dv["items"]["captions"]["score"] == 10 and dv["items"]["text_density"]["score"] is None
+print("ok")
