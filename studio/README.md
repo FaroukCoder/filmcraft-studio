@@ -29,7 +29,7 @@ Each run writes `edl.vN.json`, `project.vN.fcproj`, `render.vN.mp4` and `report.
 - Text is positioned by its alignment point: set `align: center` to centre it.
 - Export with `--gpu-rendering off` while the GPU is unstable under sustained load.
 
-Requirements: the studio venv `E:\AI\filmcraft\.venv` and the FilmCraft 0.6.0 CLI (`FILMCRAFT_CLI` overrides its path). The venv has numpy, faster-whisper, rapidocr-onnxruntime and playwright; playwright drives the Edge that ships with Windows.
+Requirements: the studio venv `E:\AI\filmcraft\.venv` and the FilmCraft 0.7.2 CLI (`FILMCRAFT_CLI` overrides its path). The venv has numpy, faster-whisper, rapidocr-onnxruntime and playwright; playwright drives the Edge that ships with Windows.
 
 ## DJ set (P2 core)
 
@@ -84,3 +84,8 @@ DJ clips used to open on 4 bars of build-up, so the drop only hit around 7 s in.
 - The rubric's hook item for DJ clips is now "does the drop land within 1.5 s" (`drop_at`).
 - Verified on the synthetic set: each part's audio matches the recording within 0.1 ms (correlation ≥ 0.98).
 - `tease_bars=0` gives the old straight clip.
+
+## Upstream sync
+
+`sh studio/verify_sync.sh` runs the self-checks, a talking-head job and a DJ job against the pinned FilmCraft and prints each render's QA. Run it after merging an upstream tag and moving `fc.CLI` to that release's portable build.
+- **2026-10-13: 0.6.0 → 0.7.2 (382 commits).** The command changes we use were all additive: `file.newSequence` `fromItems`, `timeline.place` `items`, keyframe `time` kept outside the clip, FLAC/EXR export options, and 7 new commands. Results matched 0.6.0.

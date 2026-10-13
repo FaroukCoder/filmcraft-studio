@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 TICKS = 254_016_000_000  # FilmCraft time unit: ticks per second
-CLI = Path(os.environ.get("FILMCRAFT_CLI", r"E:\AI\filmcraft\release-0.6.0\app"
-                          r"\filmcraft-0.6.0-windows-x64-portable\filmcraft-cli.exe"))
+CLI = Path(os.environ.get("FILMCRAFT_CLI", r"E:\AI\filmcraft\release-0.7.2\app"
+                          r"\filmcraft-0.7.2-windows-x64-portable\filmcraft-cli.exe"))
 
 
 def ticks(seconds: float) -> int:
