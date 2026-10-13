@@ -124,7 +124,8 @@ def to_style(ms: list[dict]) -> dict:
             "chars_per_caption": 18, "uppercase": bool(up is not None and up >= 0.6),
             "caption_style": {"font": "Inter", "size": 84, "color": "#ffffff", "background": False,
                               "outline": 6.0, "outlineColor": "#000000", "align": "center",
-                              "anchor": anchor, "margin": 0.18 if anchor != "middle" else 0.0},
+                              "anchor": anchor,  # bottom: clear the Reels caption/buttons overlay (qa.IG_BOTTOM_UI)
+                              "margin": 0.24 if anchor == "bottom" else 0.18 if anchor == "top" else 0.0},
             "measured": {k: med(k) for k in ("cuts_per_10s", "median_shot", "words_per_second",
                                              "brightness", "saturation", "caption_frames",
                                              "words_per_caption", "uppercase", "caption_y",

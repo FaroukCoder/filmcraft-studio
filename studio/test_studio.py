@@ -96,3 +96,14 @@ assert reframe.position_x(0.5, 1920, 177.78) == 540.0
 assert reframe.position_x(0.0, 1920, 177.78) == round(540 + (1920 * 1.7778 - 1080) / 2, 1)
 assert reframe.position_x(0.3, 1920, 177.78) == round(540 + 0.2 * 1920 * 1.7778, 1)
 print("ok")
+
+# post-render QA: detector spans and the true peak parse out of an ffmpeg log
+from studio import qa  # noqa: E402
+log = ("[blackdetect @ 0] black_start:0 black_end:0.8 black_duration:0.8\n"
+       "[freezedetect @ 0] lavfi.freezedetect.freeze_start: 3.5\n"
+       "[silencedetect @ 0] silence_start: -0.01\n[silencedetect @ 0] silence_end: 2 | silence_duration: 2\n"
+       "  True peak:\n    Peak:       -0.4 dBFS\n")
+d = qa.parse(log)
+assert d["black"] == [(0.0, 0.8)] and d["freeze"] == [(3.5, None)] and d["silence"] == [(0.0, 2.0)]
+assert d["true_peak"] == -0.4 and qa.parse("    Peak:       -inf dBFS")["true_peak"] is None
+print("ok")

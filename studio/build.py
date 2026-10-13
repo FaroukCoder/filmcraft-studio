@@ -80,8 +80,11 @@ def build_dj(edl: dict, project: Path) -> dict:
 def export(project: Path, out: Path) -> None:
     """H.264, burned captions, loudness normalised to -14 LUFS (the social-platform target),
     CPU rendering (the GPU is unstable under sustained load)."""
+    # --settings is ExportSettings JSON (a flat "loudnessLufs" there is silently ignored). The
+    # ceiling sits 1.5 dB under the -1 dBTP QA limit: the AAC encode overshoots the limiter ~1 dB.
+    settings = '{"burnCaptions": true, "effects": {"loudness": {"enabled": true, "target_lufs": -14, "true_peak_dbtp": -2.5}}}'
     r = subprocess.run([str(CLI), "--project", str(project), "export", str(out),
-                        "--gpu-rendering", "off", "--settings", '{"burnCaptions": true, "loudnessLufs": -14}'],
+                        "--gpu-rendering", "off", "--settings", settings],
                        capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0 or not out.exists():
         raise RuntimeError(f"export failed ({r.returncode}): {r.stdout[-800:]} {r.stderr[-800:]}")

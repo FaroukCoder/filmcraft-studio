@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import analyze, build, plan, reframe, virality
+from . import analyze, build, plan, qa, reframe, virality
 
 JOBS = Path(r"E:\AI\studio-jobs")
 
@@ -45,7 +45,8 @@ def talking_head(video: Path, style: str = "talking-head-default", name: str | N
               "cuts": len(edl["segments"]), "captions": counts["captions"],
               "words": len(ws), "fillers_removed": sum(analyze.is_filler(w["w"]) for w in ws),
               "took_seconds": round(time.time() - t0, 1), "render": str(job / f"render.v{v}.mp4"),
-              "virality": virality.score(edl, job / f"render.v{v}.mp4")}
+              "virality": virality.score(edl, job / f"render.v{v}.mp4"),
+              "qa": qa.check(job / f"render.v{v}.mp4", edl, counts["duration"])}
     (job / f"report.v{v}.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     return report
 
@@ -87,7 +88,8 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None) -> 
         build.build_dj(edl, job / f"project.{stem}.fcproj")
         build.export(job / f"project.{stem}.fcproj", job / f"render.{stem}.mp4")
         renders.append({"render": str(job / f"render.{stem}.mp4"), "drop_at": m["at"], "bpm": m["bpm"],
-                        "score": m["score"], "virality": virality.score(edl, job / f"render.{stem}.mp4")["total"]})
+                        "score": m["score"], "virality": virality.score(edl, job / f"render.{stem}.mp4")["total"],
+                        "qa": qa.check(job / f"render.{stem}.mp4", edl, edl["duration"])})
     (job / f"edl.v{v}.json").write_text(json.dumps({"moments": filmed}, indent=1), encoding="utf-8")
     report = {"version": v, "camera": str(camera), "audio": str(audio), "sync_offset": offset,
               "sync_confidence": conf, "clips": renders, "took_seconds": round(time.time() - t0, 1)}

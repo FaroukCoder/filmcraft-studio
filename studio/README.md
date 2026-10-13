@@ -64,3 +64,14 @@ Not yet: mix transitions, crowd/hands-on moments (vision, needs the GPU), real t
 - Talking-head: one steady position per segment, since jump cuts hide the reposition. DJ clips: keyframed `motion.position`, with a hold key before each cut so FilmCraft doesn't turn it into a whip pan.
 - `motion.position` is where the source's centre lands in the frame (sequence pixels). `position_x` clamps it so no edge shows.
 - Check: `python -m studio.test_reframe` (a face pasted left, then right, of a 16:9 canvas).
+
+## Post-render QA
+
+`qa.check(render, edl, seconds)` runs on every render and lands in the report as `"qa": {"ok", "problems", ...}`. It's OpenMontage's self-review idea.
+- **ffprobe:** size, fps, audio stream, and length against the EDL (±2 frames).
+- **One ffmpeg pass:** black ≥ 0.5 s, frozen picture ≥ 2 s, silence ≥ 1.5 s, true peak > −1 dBTP.
+- **Captions:** a bottom anchor must clear Instagram's caption/buttons overlay (≥ 20% margin).
+
+It found two real bugs on its first run:
+- The export's `"loudnessLufs"` key was silently ignored, because `--settings` is `ExportSettings` JSON. The export now sets `effects.loudness` with a −2.5 dBTP ceiling (the AAC encode overshoots the limiter by ~1 dB). Result: −14.1 LUFS, −2.3 dBTP.
+- Bottom captions sat under the Reels UI. Style packs now use a 0.24 bottom margin.
