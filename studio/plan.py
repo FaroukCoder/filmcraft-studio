@@ -68,14 +68,16 @@ def frame_snap(caps: list[dict], fps: float) -> list[dict]:
 
 
 def plan_talking_head(source: str, info: dict, ws: list[dict], segments: list[tuple[float, float]],
-                      style: str = "talking-head-default") -> dict:
+                      style: str = "talking-head-default", centres: list[float] | None = None) -> dict:
     st = get_style(style)
     segs, t, zoomed = [], 0.0, False
-    for a, b in segments:
+    for n, (a, b) in enumerate(segments):
         if b - a >= st["min_zoom_len"]:
             zoomed = not zoomed  # alternate framing on every real cut: the jump-cut punch-in
         segs.append({"src_in": a, "src_out": b, "start": round(t, 3),
                      "zoom": st["punch_in"] if zoomed else 1.0})
+        if centres:  # where the speaker is in a wide source (reframe.segment_centres)
+            segs[-1]["x"] = centres[n]
         t += b - a
     caps = []
     for s in segs:  # map the words inside each kept span onto the timeline
@@ -91,5 +93,13 @@ def plan_talking_head(source: str, info: dict, ws: list[dict], segments: list[tu
     caps = frame_snap(caps, fps=30)
     return {"version": 1, "style": style, "source": source, "size": [1080, 1920],
             "fps": 30, "segments": segs, "captions": caps,
-            "caption_style": st["caption_style"],
+            "caption_style": st["caption_style"], "src_size": [info["width"], info["height"]],
             "base_scale": base_scale(info["width"], info["height"])}
+
+
+def crop_fraction(src_w: int, src_h: int, out_w: int = 1080, out_h: int = 1920) -> float | None:
+    """Share of the source width a filled vertical frame shows; None if the source isn't wider
+    than 9:16 (nothing to reframe)."""
+    if src_w / src_h <= out_w / out_h + 0.01:
+        return None
+    return round(out_w / (src_w * base_scale(src_w, src_h, out_w, out_h) / 100), 4)

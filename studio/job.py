@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import analyze, build, plan, virality
+from . import analyze, build, plan, reframe, virality
 
 JOBS = Path(r"E:\AI\studio-jobs")
 
@@ -32,7 +32,9 @@ def talking_head(video: Path, style: str = "talking-head-default", name: str | N
     ws = analyze.words(video, job / "words.json")
     st = plan.get_style(style)
     segs = analyze.speech_segments(ws, st["max_gap"], st["pad"], duration=info["duration"])
-    edl = plan.plan_talking_head(str(video), info, ws, segs, style)
+    crop = plan.crop_fraction(info["width"], info["height"])
+    centres = reframe.segment_centres(video, segs, crop) if crop else None
+    edl = plan.plan_talking_head(str(video), info, ws, segs, style, centres)
     v = _next_version(job)
     (job / f"edl.v{v}.json").write_text(json.dumps(edl, indent=1), encoding="utf-8")
     counts = build.build(edl, job / f"project.v{v}.fcproj")
@@ -63,8 +65,14 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None) -> 
     filmed = [m for m in dj.moments(clean, top=top * 3)
               if m["start"] >= offset and m["end"] <= offset + cam_info["duration"]][:top]
     v, renders = _next_version(job), []
+    crop = plan.crop_fraction(cam_info["width"], cam_info["height"])
     for n, m in enumerate(filmed, 1):
+        cam_in = m["start"] - offset
+        keys = [] if not crop else [  # follow the DJ through the clip (times relative to it)
+            (round(t - cam_in, 3), c) for t, c in
+            reframe.keyframes(reframe.follow(reframe.faces(camera, cam_in, cam_in + m["end"] - m["start"]), crop))]
         edl = {"version": 1, "kind": "dj-drop", "camera": str(camera), "audio": str(audio),
+               "src_size": [cam_info["width"], cam_info["height"]], "reframe": keys,
                "size": [1080, 1920], "fps": 30, "moment": m, "sync": {"offset": offset, "confidence": conf},
                "cam_in": round(m["start"] - offset, 4), "audio_in": m["start"],
                "duration": round(m["end"] - m["start"], 4),

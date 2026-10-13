@@ -4,6 +4,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from . import reframe
 from .fc import CLI, TICKS, Session, ticks
 
 
@@ -16,8 +17,11 @@ def build(edl: dict, project: Path) -> dict:
         for s in edl["segments"]:
             clips = fc.run("timeline.place", item=item, track="V1", time=ticks(s["start"]),
                            sourceIn=ticks(s["src_in"]), duration=ticks(s["src_out"] - s["src_in"]))
-            fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="scale",
-                   value=round(edl["base_scale"] * s["zoom"], 2))
+            scale = round(edl["base_scale"] * s["zoom"], 2)
+            fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="scale", value=scale)
+            if "x" in s:  # follow the speaker in a wide source instead of a blind centre crop
+                fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="position",
+                       value=[reframe.position_x(s["x"], edl["src_size"][0], scale, w), h / 2])
         if edl["captions"]:
             fc.run("captions.newTrack", format="Subtitle", name="Captions")
             fc.run("captions.setStyle", track="C1", **edl["caption_style"])
@@ -57,6 +61,10 @@ def build_dj(edl: dict, project: Path) -> dict:
                        duration=ticks(edl["duration"]), audio=False)
         fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="scale",
                value=edl["base_scale"])
+        for t, cam in edl.get("reframe", []):  # keyframed camera that follows the DJ
+            fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="position",
+                   value=[reframe.position_x(cam, edl["src_size"][0], edl["base_scale"], w), h / 2],
+                   time=ticks(t), keyframe=True)
         fc.run("timeline.place", item=aud, track="A1", time=0, sourceIn=ticks(edl["audio_in"]),
                duration=ticks(edl["duration"]))  # an audio track as `track`: the sound alone
         if edl.get("title"):  # a static FilmCraft title (graphics below are the animated kind)

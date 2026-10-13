@@ -78,3 +78,21 @@ assert h.count('class="w"') == 3 and "animation-delay:0.28s" in h
 assert "background:transparent" in h and "#ff0000" in h
 assert "TRACK ID?" in mograph.template_html("track-id", text="TRACK ID?")
 print("ok")
+
+# reframe: the virtual camera holds inside the deadzone, eases toward a drifting face, cuts on a
+# jump, holds when the face is lost, starts centred before any face, and stays inside the source
+from studio import reframe  # noqa: E402
+crop = plan.crop_fraction(1920, 1080)
+assert crop == 0.3164 and plan.crop_fraction(1080, 1920) is None
+path = reframe.follow([(0, None), (0.25, 0.30), (0.5, 0.32), (0.75, 0.45), (1.0, None), (1.25, 0.85)], crop)
+cams = [c for _, c in path]
+assert cams[0] == cams[1] == 0.30 and cams[2] == 0.30          # first sight; 0.02 is inside the deadzone
+assert 0.30 < cams[3] < 0.45 and cams[4] == cams[3]             # eased catch-up; lost face -> hold
+assert cams[5] == round(1 - crop / 2, 4)                        # jump -> cut, clamped to the edge
+keys = reframe.keyframes(path)
+assert keys[-2] == (round(1.25 - 1 / 30, 4), cams[4]) and keys[-1] == (1.25, cams[5])  # hold key, no whip pan
+# position: the source centre's place in the frame; centred subject -> centred; never past an edge
+assert reframe.position_x(0.5, 1920, 177.78) == 540.0
+assert reframe.position_x(0.0, 1920, 177.78) == round(540 + (1920 * 1.7778 - 1080) / 2, 1)
+assert reframe.position_x(0.3, 1920, 177.78) == round(540 + 0.2 * 1920 * 1.7778, 1)
+print("ok")

@@ -55,3 +55,12 @@ Not yet: mix transitions, crowd/hands-on moments (vision, needs the GPU), real t
 - Built-in templates: `kinetic-title`, `lower-third`, `track-id`.
 - An EDL `"graphics"` entry can name a template or carry its own `"html"` (for LLM/Claude-written graphics). The contract: CSS animations or `window.seek(seconds)`, with a transparent background.
 - DJ clips use `track-id`, which slams in exactly on the drop.
+
+## Reframe (wide footage -> 9:16)
+
+`reframe.py` replaces the blind centre crop for any source wider than 9:16.
+- YuNet (built into OpenCV 5; model `E:\AI\filmcraft\models\face_detection_yunet_2023mar.onnx`, from opencv_zoo) finds the biggest face every 0.25 s.
+- A virtual camera follows it: deadzone 15% of the crop, eased catch-up, a hard cut when the subject jumps, hold when the face is lost. These are opensource-clipping's rules.
+- Talking-head: one steady position per segment, since jump cuts hide the reposition. DJ clips: keyframed `motion.position`, with a hold key before each cut so FilmCraft doesn't turn it into a whip pan.
+- `motion.position` is where the source's centre lands in the frame (sequence pixels). `position_x` clamps it so no edge shows.
+- Check: `python -m studio.test_reframe` (a face pasted left, then right, of a 16:9 canvas).
