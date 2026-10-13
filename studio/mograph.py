@@ -2,9 +2,10 @@
 FilmCraft image sequence on a track above the footage (the HyperFrames idea, but stepped
 frame by frame so the render is exact and repeatable).
 
-Contract for any HTML (built-in templates now, local-LLM or Claude-written later): animate
-with CSS animations / the Web Animations API, or define `window.seek(seconds)`; the page
-background must stay transparent. Rendered in the Edge that ships with Windows (no download)."""
+Contract for any HTML (built-in templates, local-LLM or Claude-written): animate with CSS/WAAPI,
+any requestAnimationFrame/timer-driven JS (GSAP, canvas, Three.js, Lottie: the virtual clock steps
+it), paused GSAP timelines on `window.__timelines` (HyperFrames), or `window.seek(seconds)`; keep the
+page background transparent. Rendered in the Edge that ships with Windows (no download)."""
 from __future__ import annotations
 
 import html as _html
@@ -69,24 +70,77 @@ def template_html(name: str, size: tuple[int, int] = (1080, 1920), accent: str =
     return _BASE % {"w": size[0], "h": size[1], "css": t["css"] % p, "body": t["body"](p)}
 
 
+# Virtual clock, injected before the page's own scripts (the timeweb/timecut and Replit-renderer
+# technique): Date, performance.now, rAF and timers run on a timeline that only moves when we step
+# a frame, so canvas/GSAP/Three.js/Lottie animations land exactly on each frame however slow the
+# screenshot is. Worker-thread canvases would bypass it, so OffscreenCanvas is switched off.
+_CLOCK = """(() => {
+  let now = 0, timers = [], rafs = [], nextId = 1;
+  const RealDate = Date, t0 = RealDate.now();
+  performance.now = () => now;
+  window.Date = class extends RealDate {
+    constructor(...a) { super(...(a.length ? a : [t0 + now])); }
+    static now() { return t0 + now; }
+  };
+  const add = (fn, ms, args, every) => {
+    const id = nextId++, step = Math.max(1, +ms || 0);  // >= 1 ms: a 0 ms chain can't spin forever
+    timers.push({id, due: now + step, every: every ? step : 0, fn, args});
+    return id;
+  };
+  window.setTimeout = (fn, ms, ...args) => add(fn, ms, args, false);
+  window.setInterval = (fn, ms, ...args) => add(fn, ms, args, true);
+  window.clearTimeout = window.clearInterval = id => { timers = timers.filter(t => t.id !== id); };
+  window.requestAnimationFrame = fn => { const id = nextId++; rafs.push({id, fn}); return id; };
+  window.cancelAnimationFrame = id => { rafs = rafs.filter(r => r.id !== id); };
+  window.OffscreenCanvas = undefined;
+  HTMLCanvasElement.prototype.transferControlToOffscreen = undefined;
+  window.__vclock = {
+    advance(to) {  // fire due timers in order, then one animation frame at `to` (ms)
+      for (let t; (t = timers.sort((a, b) => a.due - b.due || a.id - b.id)[0]) && t.due <= to;) {
+        now = t.due;
+        if (t.every) t.due += t.every; else timers.shift();
+        try { typeof t.fn === "function" ? t.fn(...t.args) : (0, eval)(t.fn); } catch (e) { console.error(e); }
+      }
+      now = to;
+      const run = rafs; rafs = [];
+      run.forEach(r => { try { r.fn(now); } catch (e) { console.error(e); } });
+    }
+  };
+})();"""
+
+# One frame: move the clock, seek CSS/WAAPI animations (each from when it first appeared, so one a
+# script adds at 0.5 s starts at its own 0), seek HyperFrames-style paused GSAP timelines
+# (`window.__timelines`, an object or array) and call an optional `window.seek(t)`.
+_STEP = """t => {
+  window.__vclock.advance(t * 1000);
+  document.getAnimations().forEach(a => {
+    if (a.__born === undefined) a.__born = t;
+    a.pause(); a.currentTime = (t - a.__born) * 1000;
+  });
+  Object.values(window.__timelines || {}).forEach(tl => tl.seek ? tl.seek(t, false) : tl.time && tl.time(t));
+  if (window.seek) window.seek(t);
+}"""
+
+
 def render(html: str, out_dir: Path, duration: float, fps: int = 30,
            size: tuple[int, int] = (1080, 1920)) -> list[Path]:
-    """Step the page's animations frame by frame and screenshot each frame with alpha."""
+    """Step the page frame by frame on a virtual clock and screenshot each frame with alpha."""
+    import tempfile
     from playwright.sync_api import sync_playwright
     if out_dir.exists():
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
     frames = []
-    with sync_playwright() as pw:
+    with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
+        page_file = Path(tmp) / "graphic.html"  # a real navigation, so the clock script runs first
+        page_file.write_text(html, encoding="utf-8")
         browser = pw.chromium.launch(channel="msedge")
         page = browser.new_page(viewport={"width": size[0], "height": size[1]})
-        page.set_content(html)
+        page.add_init_script(_CLOCK)
+        page.goto(page_file.as_uri())
         page.evaluate("document.fonts.ready")
-        page.evaluate("document.getAnimations().forEach(a => a.pause())")
         for i in range(round(duration * fps)):
-            t = i / fps
-            page.evaluate("t => { document.getAnimations().forEach(a => { a.currentTime = t * 1000; });"
-                          " if (window.seek) window.seek(t); }", t)
+            page.evaluate(_STEP, i / fps)
             f = out_dir / f"f_{i:05d}.png"
             page.screenshot(path=str(f), omit_background=True)
             frames.append(f)

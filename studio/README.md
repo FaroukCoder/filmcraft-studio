@@ -51,7 +51,10 @@ Not yet: mix transitions, crowd/hands-on moments (vision, needs the GPU), real t
 
 ## Motion graphics (P4, first slice)
 
-`mograph.py` renders HTML/CSS animation to transparent PNG frames in headless Edge, stepping the page's animations frame by frame so renders are exact. Then it places them as an image sequence on V2/V3 (FilmCraft composites the alpha).
+`mograph.py` renders HTML animation to transparent PNG frames in headless Edge, frame by frame, then places them as an image sequence on V2/V3 (FilmCraft composites the alpha). This is the "web page as a stop-motion camera" technique (timecut/timeweb, Remotion, HyperFrames, Replit's renderer).
+- **Virtual clock:** a script injected before the page's own replaces `Date`, `performance.now`, `requestAnimationFrame` and the timers, so time only moves when a frame is stepped. Canvas, GSAP, Three.js and Lottie land exactly on each frame however slow the screenshot is, and two renders are byte-identical. `OffscreenCanvas` is off, because a worker canvas would dodge the clock.
+- **Each frame:** advance the clock (due timers, then one animation frame), seek every CSS/WAAPI animation from when it first appeared, seek paused GSAP timelines on `window.__timelines` (the HyperFrames contract), and call `window.seek(t)` if the page defines it.
+- **Measured:** before the clock, a rAF-driven ball ran ~1.4× too fast (wall-clock time while each screenshot took ~100 ms). Now it's within 1 px; a GSAP ticker tween and a `__timelines` timeline are both exact. Check: `python -m studio.test_mograph`.
 - Built-in templates: `kinetic-title`, `lower-third`, `track-id`.
 - An EDL `"graphics"` entry can name a template or carry its own `"html"` (for LLM/Claude-written graphics). The contract: CSS animations or `window.seek(seconds)`, with a transparent background.
 - DJ clips use `track-id`, which slams in exactly on the drop.
