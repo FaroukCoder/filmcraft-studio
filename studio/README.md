@@ -4,6 +4,8 @@ Python layer of the Creative Studio (master plan: vault `Creative Studio/Master 
 
 This folder lives in the fork but touches no upstream file. Upstream merges never conflict with it.
 
+**How things should look** lives in [`direction/`](direction/CLAUDE.md): the never-ship list, measured motion values, the review gates, per-identity packs (`house`, `club`), job briefs and the graphics library. Read it before changing any template.
+
 ## Talking-head (P1)
 
 ```
