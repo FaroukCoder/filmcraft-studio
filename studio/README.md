@@ -1,6 +1,6 @@
 # Creative Studio orchestrator
 
-Python layer of the Creative Studio (master plan: vault `Plans/Creative Studio - master plan.md`). It turns raw footage into edits by driving FilmCraft through its command protocol only (MCP stdio session, `fc.py`), so upstream FilmCraft updates don't break it.
+Python layer of the Creative Studio (master plan: vault `Creative Studio/Master plan.md`; research: `Creative Studio/Research - open-source AI video editors.md`). It turns raw footage into edits by driving FilmCraft through its command protocol only (MCP stdio session, `fc.py`), so upstream FilmCraft updates don't break it.
 
 This folder lives in the fork but touches no upstream file. Upstream merges never conflict with it.
 
