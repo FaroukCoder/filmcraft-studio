@@ -97,6 +97,33 @@ def plan_talking_head(source: str, info: dict, ws: list[dict], segments: list[tu
             "base_scale": base_scale(info["width"], info["height"])}
 
 
+def plan_dj_clip(m: dict, offset: float, camera: str, audio: str, cam_info: dict,
+                 tease_bars: int = 1) -> dict:
+    """EDL for one DJ moment (dj.moments: start, at = the drop, end, bpm), in parts that each place
+    camera picture + clean audio. With `tease_bars`, the clip opens on that many bars of the drop
+    (a flash-forward, so the payoff lands in the first second), then cuts back to the build-up.
+    Both cuts sit on bar lines. Times: `audio_in` in the recording, `cam_in` in the camera file."""
+    bar = 4 * 60 / m["bpm"]
+    tease = round(tease_bars * bar, 4) if tease_bars and m["at"] + tease_bars * bar <= m["end"] else 0.0
+    main = round(m["end"] - m["start"], 4)
+    parts = ([{"start": 0.0, "audio_in": m["at"], "cam_in": round(m["at"] - offset, 4), "duration": tease}]
+             if tease else []) + [{"start": tease, "audio_in": m["start"],
+                                    "cam_in": round(m["start"] - offset, 4), "duration": main}]
+    total = round(tease + main, 4)
+    drop_in_main = round(tease + m["at"] - m["start"], 3)
+    return {"version": 1, "kind": "dj-drop", "camera": camera, "audio": audio, "moment": m,
+            "src_size": [cam_info["width"], cam_info["height"]], "size": [1080, 1920], "fps": 30,
+            "parts": parts, "duration": total, "tease": tease,
+            "drop_at": 0.0 if tease else drop_in_main,  # when the payoff first hits (rubric hook)
+            # the animated TRACK ID? stamp slams in exactly on the (real) drop
+            "graphics": [{"template": "track-id", "params": {"text": "TRACK ID?"},
+                          "start": drop_in_main, "duration": 2.5, "track": "V2"}],
+            "base_scale": base_scale(cam_info["width"], cam_info["height"]),
+            "segments": [{"start": p["start"], "src_in": p["audio_in"],
+                          "src_out": round(p["audio_in"] + p["duration"], 4), "zoom": 1.0} for p in parts],
+            "captions": [{"start": 0.0, "end": total, "text": "TRACK ID?"}]}
+
+
 def crop_fraction(src_w: int, src_h: int, out_w: int = 1080, out_h: int = 1920) -> float | None:
     """Share of the source width a filled vertical frame shows; None if the source isn't wider
     than 9:16 (nothing to reframe)."""

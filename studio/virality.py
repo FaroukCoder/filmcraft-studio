@@ -38,6 +38,9 @@ def score(edl: dict, render: Path | None = None, platform: str = "instagram") ->
         + (2 if caps and caps[0]["start"] <= 1.0 else 0)
     items["hook"] = {"score": float(hook), "why": f"first words at {first_word:.2f}s, "
                                                   f"visual change in 1.5s: {bool(early_cut)}"}
+    if edl.get("drop_at") is not None:  # a DJ clip's hook is the drop itself: does it land in 1.5 s?
+        items["hook"] = {"score": _band(edl["drop_at"], 0, 1.5, soft=6),
+                         "why": f"the drop first hits at {edl['drop_at']:.1f}s"}
 
     # each boundary counts once, whether it is a cut, a punch-in change or both
     changes = sum(1 for a, b in zip(segs, segs[1:])

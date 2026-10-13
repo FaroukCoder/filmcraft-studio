@@ -107,3 +107,18 @@ d = qa.parse(log)
 assert d["black"] == [(0.0, 0.8)] and d["freeze"] == [(3.5, None)] and d["silence"] == [(0.0, 2.0)]
 assert d["true_peak"] == -0.4 and qa.parse("    Peak:       -inf dBFS")["true_peak"] is None
 print("ok")
+
+# DJ clip: a one-bar flash-forward of the drop opens the clip, then the build-up plays through;
+# cuts on bar lines, the TRACK ID stamp still lands on the real drop, the rubric hook is the drop
+m = {"start": 100.0, "at": 107.5, "end": 122.5, "bpm": 128.0}  # 4 bars before, 8 after at 128 BPM
+cam = {"width": 1920, "height": 1080}
+e = plan.plan_dj_clip(m, offset=40.0, camera="c.mp4", audio="a.wav", cam_info=cam)
+bar = 4 * 60 / 128
+assert e["tease"] == round(bar, 4) and e["drop_at"] == 0.0
+assert e["parts"][0] == {"start": 0.0, "audio_in": 107.5, "cam_in": 67.5, "duration": round(bar, 4)}
+assert e["parts"][1]["start"] == e["tease"] and e["parts"][1]["audio_in"] == 100.0 and e["parts"][1]["cam_in"] == 60.0
+assert e["graphics"][0]["start"] == round(bar + 7.5, 3) and e["duration"] == round(bar + 22.5, 4)
+assert virality.score(e)["items"]["hook"]["score"] == 10
+plain = plan.plan_dj_clip(m, 40.0, "c.mp4", "a.wav", cam, tease_bars=0)
+assert len(plain["parts"]) == 1 and plain["drop_at"] == 7.5 and virality.score(plain)["items"]["hook"]["score"] == 0
+print("ok")

@@ -52,21 +52,22 @@ def place_graphics(fc, edl: dict, project: Path) -> None:
 
 def build_dj(edl: dict, project: Path) -> dict:
     """A DJ moment: the camera's picture (no sound) over the clean recording's audio, synced,
-    with a hook title. EDL: {"camera", "audio", "cam_in", "audio_in", "duration", "title", ...}."""
+    with a hook title. EDL (plan.plan_dj_clip): {"camera", "audio", "parts": [{"start",
+    "cam_in", "audio_in", "duration", "reframe"?}], "duration", "title"?, "graphics", ...}."""
     w, h = edl["size"]
     with Session() as fc:
         fc.run("file.newSequence", name=project.stem, width=w, height=h, fps=edl["fps"])
         cam, aud = fc.run("file.import", paths=[edl["camera"], edl["audio"]])["items"][:2]
-        clips = fc.run("timeline.place", item=cam, track="V1", time=0, sourceIn=ticks(edl["cam_in"]),
-                       duration=ticks(edl["duration"]), audio=False)
-        fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="scale",
-               value=edl["base_scale"])
-        for t, cam in edl.get("reframe", []):  # keyframed camera that follows the DJ
-            fc.run("effects.setParam", clip=clips["clips"][0], effect="motion", param="position",
-                   value=[reframe.position_x(cam, edl["src_size"][0], edl["base_scale"], w), h / 2],
-                   time=ticks(t), keyframe=True)
-        fc.run("timeline.place", item=aud, track="A1", time=0, sourceIn=ticks(edl["audio_in"]),
-               duration=ticks(edl["duration"]))  # an audio track as `track`: the sound alone
+        for p in edl["parts"]:
+            clip = fc.run("timeline.place", item=cam, track="V1", time=ticks(p["start"]),
+                          sourceIn=ticks(p["cam_in"]), duration=ticks(p["duration"]), audio=False)["clips"][0]
+            fc.run("effects.setParam", clip=clip, effect="motion", param="scale", value=edl["base_scale"])
+            for t, x in p.get("reframe", []):  # keyframed camera that follows the DJ; `time` is
+                fc.run("effects.setParam", clip=clip, effect="motion", param="position",  # sequence time
+                       value=[reframe.position_x(x, edl["src_size"][0], edl["base_scale"], w), h / 2],
+                       time=ticks(p["start"] + t), keyframe=True)
+            fc.run("timeline.place", item=aud, track="A1", time=ticks(p["start"]),
+                   sourceIn=ticks(p["audio_in"]), duration=ticks(p["duration"]))  # the sound alone
         if edl.get("title"):  # a static FilmCraft title (graphics below are the animated kind)
             fc.run("graphics.newText", text=edl["title"], position=[w // 2, round(h * 0.2)], size=120,
                    seconds=edl["duration"], time=0, newClip=True)

@@ -51,7 +51,7 @@ def talking_head(video: Path, style: str = "talking-head-default", name: str | N
     return report
 
 
-def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None) -> dict:
+def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None, tease_bars: int = 1) -> dict:
     """Camera video + clean Serato recording -> the best drop moments, each its own clip:
     synced picture, clean sound, a "TRACK ID?" hook. Moments the camera didn't film are skipped."""
     from . import dj
@@ -68,21 +68,11 @@ def dj_set(camera: Path, audio: Path, top: int = 3, name: str | None = None) -> 
     v, renders = _next_version(job), []
     crop = plan.crop_fraction(cam_info["width"], cam_info["height"])
     for n, m in enumerate(filmed, 1):
-        cam_in = m["start"] - offset
-        keys = [] if not crop else [  # follow the DJ through the clip (times relative to it)
-            (round(t - cam_in, 3), c) for t, c in
-            reframe.keyframes(reframe.follow(reframe.faces(camera, cam_in, cam_in + m["end"] - m["start"]), crop))]
-        edl = {"version": 1, "kind": "dj-drop", "camera": str(camera), "audio": str(audio),
-               "src_size": [cam_info["width"], cam_info["height"]], "reframe": keys,
-               "size": [1080, 1920], "fps": 30, "moment": m, "sync": {"offset": offset, "confidence": conf},
-               "cam_in": round(m["start"] - offset, 4), "audio_in": m["start"],
-               "duration": round(m["end"] - m["start"], 4),
-               # the animated TRACK ID? stamp slams in exactly on the drop
-               "graphics": [{"template": "track-id", "params": {"text": "TRACK ID?"},
-                             "start": round(m["at"] - m["start"], 3), "duration": 2.5, "track": "V2"}],
-               "base_scale": plan.base_scale(cam_info["width"], cam_info["height"]),
-               "segments": [{"start": 0, "src_in": 0, "src_out": round(m["end"] - m["start"], 4), "zoom": 1.0}],
-               "captions": [{"start": 0.0, "end": round(m["end"] - m["start"], 4), "text": "TRACK ID?"}]}
+        edl = plan.plan_dj_clip(m, offset, str(camera), str(audio), cam_info, tease_bars)
+        edl["sync"] = {"offset": offset, "confidence": conf}
+        for p in edl["parts"] if crop else []:  # follow the DJ (key times relative to the part)
+            path = reframe.follow(reframe.faces(camera, p["cam_in"], p["cam_in"] + p["duration"]), crop)
+            p["reframe"] = [(round(t - p["cam_in"], 3), c) for t, c in reframe.keyframes(path)]
         stem = f"drop{n}.v{v}"
         (job / f"edl.{stem}.json").write_text(json.dumps(edl, indent=1), encoding="utf-8")
         build.build_dj(edl, job / f"project.{stem}.fcproj")

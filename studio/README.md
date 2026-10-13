@@ -75,3 +75,12 @@ Not yet: mix transitions, crowd/hands-on moments (vision, needs the GPU), real t
 It found two real bugs on its first run:
 - The export's `"loudnessLufs"` key was silently ignored, because `--settings` is `ExportSettings` JSON. The export now sets `effects.loudness` with a −2.5 dBTP ceiling (the AAC encode overshoots the limiter by ~1 dB). Result: −14.1 LUFS, −2.3 dBTP.
 - Bottom captions sat under the Reels UI. Style packs now use a 0.24 bottom margin.
+
+## DJ hook: flash-forward tease
+
+DJ clips used to open on 4 bars of build-up, so the drop only hit around 7 s in. Every retention source puts the payoff in the first 1.5 s.
+- `plan.plan_dj_clip(..., tease_bars=1)` now opens on one bar of the drop, then cuts back to the build-up. Both cuts sit on bar lines.
+- The EDL is a list of `parts` (camera picture + clean audio each). `build_dj` places them, and keyframe `time` is sequence time (FilmCraft converts it with `source_time_at`).
+- The rubric's hook item for DJ clips is now "does the drop land within 1.5 s" (`drop_at`).
+- Verified on the synthetic set: each part's audio matches the recording within 0.1 ms (correlation ≥ 0.98).
+- `tease_bars=0` gives the old straight clip.
