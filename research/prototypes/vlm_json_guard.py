@@ -60,8 +60,9 @@ class ReelNote(BaseModel):
 
 def _inline_refs(node, defs: dict, depth: int = 0):
     """Replace every {"$ref": "#/$defs/X"} with X itself. llama.cpp's JSON-schema-to-grammar
-    converter (used by llama-server and by Ollama since 0.30) documents nested $refs as broken and
-    skips what it can't convert silently, so the bounds below would quietly stop applying."""
+    converter (used by llama-server and by Ollama since 0.30) documents nested $refs as broken
+    (issue 8073). A build of it from 2026-10-14 converted Pydantic's two-level refs (Tool ->
+    ToolKind) correctly, bounds included, so this is belt and braces, not a fix."""
     if depth > 20:
         raise ValueError("schema nests too deep")
     if isinstance(node, dict):
@@ -84,6 +85,60 @@ def bounded_schema() -> dict:
     props["takeaways"]["items"]["maxLength"] = 160
     props["topics"]["items"]["maxLength"] = 40
     return schema
+
+
+def output_budget(schema: dict) -> dict:
+    """Worst-case output the schema allows, so the output-token cap can't cut a valid answer.
+
+    Counts characters of the longest instance (strings at maxLength, arrays at maxItems, the
+    longest enum value), assumes ~2 characters per token (Arabic tokenises about twice as
+    densely as English) and 3 tokens per separator for llama.cpp's whitespace rule. Fields
+    with no bound are listed in `unbounded`: those are where a looping model runs away
+    (Pydantic leaves list[str] items unbounded, which is why bounded_schema() adds them)."""
+    unbounded: list[str] = []
+    seps = 0
+    defs = schema.get("$defs", {})
+
+    def walk(node, path: str, depth: int = 0) -> int:
+        nonlocal seps
+        if depth > 20 or not isinstance(node, dict):
+            unbounded.append(path or "<root>")
+            return 0
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/") and ref.split("/")[-1] in defs:
+            return walk(defs[ref.split("/")[-1]], path, depth + 1)
+        if "enum" in node:
+            return max(len(json.dumps(v, ensure_ascii=False)) for v in node["enum"])
+        if "anyOf" in node:
+            return max(walk(o, path, depth + 1) for o in node["anyOf"])
+        t = node.get("type")
+        if t == "string":
+            if "maxLength" not in node:
+                unbounded.append(path)
+                return 0
+            return int(node["maxLength"]) + 2
+        if t == "array":
+            if "maxItems" not in node:
+                unbounded.append(path)
+                return 0
+            n = int(node["maxItems"])
+            seps += n
+            return 2 + n * (walk(node.get("items", {}), path + "[]", depth + 1) + 1)
+        if t == "object":
+            props = node.get("properties", {})
+            seps += 2 * len(props)
+            return 2 + sum(len(k) + 4 + walk(v, f"{path}.{k}" if path else k, depth + 1) for k, v in props.items())
+        if t in ("integer", "number"):
+            return 24
+        if t == "boolean":
+            return 5
+        if t == "null":
+            return 4
+        unbounded.append(path or "<root>")
+        return 0
+
+    chars = walk(schema, "")
+    return {"chars": chars, "tokens": chars // 2 + 3 * seps + 50, "unbounded": unbounded}
 
 
 QWEN_VL_INSTRUCT_SAMPLING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5}
@@ -159,16 +214,18 @@ def note_for(video: Path | None, context: str, args, frames=None) -> tuple[ReelN
     """Returns (note or None, attempt log)."""
     frames = frames if frames is not None else extract_frames(video, args.frames)
     schema = bounded_schema()
+    budget = output_budget(schema)
+    max_tokens = args.max_tokens or budget["tokens"]  # never below what a valid answer can need
     text = PROMPT + "\n\n" + context[: args.max_context_chars]
     log: list[dict] = []
     plans = [("full", frames), ("half_frames", frames[: max(1, len(frames) // 2)])]
     for name, fr in plans:
         tokens = estimate_tokens(fr, text)
-        if tokens + args.max_tokens > args.num_ctx:
+        if tokens + max_tokens > args.num_ctx:
             log.append({"attempt": name, "skipped": f"needs ~{tokens} prompt tokens, num_ctx {args.num_ctx}"})
             continue
         try:
-            raw = _call(args, fr, text, schema, args.max_tokens)
+            raw = _call(args, fr, text, schema, max_tokens)
         except httpx.HTTPError as e:
             log.append({"attempt": name, "error": str(e)})
             continue
@@ -187,7 +244,7 @@ def note_for(video: Path | None, context: str, args, frames=None) -> tuple[ReelN
         notes = _call(args, fr, text.replace("Return JSON only, matching the schema.",
                                              "Write short plain-text notes."), None, 400)
         if not looks_looping(notes):
-            raw = _call(args, [], "Turn these notes into JSON matching the schema. Notes:\n" + notes, schema, args.max_tokens)
+            raw = _call(args, [], "Turn these notes into JSON matching the schema. Notes:\n" + notes, schema, max_tokens)
             note = ReelNote.model_validate_json(raw)
             log.append({"attempt": "two_pass", "ok": True})
             return note, log
@@ -206,7 +263,8 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default="qwen3-vl:8b")
     ap.add_argument("--frames", type=int, default=8)
     ap.add_argument("--num-ctx", type=int, default=8192)
-    ap.add_argument("--max-tokens", type=int, default=700)
+    ap.add_argument("--max-tokens", type=int, default=0,
+                    help="output cap; 0 = the schema's worst case (output_budget), so a long valid note isn't cut off")
     ap.add_argument("--max-context-chars", type=int, default=6000)
     ap.add_argument("--timeout", type=float, default=300.0)
     args = ap.parse_args(argv)

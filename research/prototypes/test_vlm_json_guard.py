@@ -86,6 +86,14 @@ def main() -> int:
         if g.estimate_tokens(full_res, "") < 16000:
             problems.append("full-resolution estimate should exceed 16k tokens")
 
+        # the output cap must cover the longest valid answer, or a long note is cut off mid-JSON
+        b = g.output_budget(g.bounded_schema())
+        if b["unbounded"] or b["tokens"] < 1500:
+            problems.append(f"bounded schema budget: {b}")
+        raw_b = g.output_budget(g.ReelNote.model_json_schema())
+        if sorted(raw_b["unbounded"]) != ["takeaways[]", "topics[]"]:
+            problems.append(f"raw Pydantic schema should show its unbounded list items: {raw_b}")
+
         srv = HTTPServer(("127.0.0.1", 0), Fake)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         for api in ("ollama", "openai"):
@@ -111,7 +119,7 @@ def main() -> int:
         # budget guard: a tiny num_ctx must skip both image attempts without calling the server
         seen.clear()
         args = Namespace(api="ollama", url=f"http://127.0.0.1:{srv.server_port}", model="m", frames=8,
-                         num_ctx=1000, max_tokens=700, max_context_chars=6000, timeout=10.0)
+                         num_ctx=1000, max_tokens=0, max_context_chars=6000, timeout=10.0)
         _, log = g.note_for(None, "", args, frames=frames)
         if not all("skipped" in l for l in log[:2]):
             problems.append(f"budget guard did not skip: {log}")

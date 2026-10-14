@@ -1111,3 +1111,29 @@ projects, first week, money, sources). All 17 prototype tests pass, including th
 config with the new `agent-gemma` entry.
 
 **Confidence changes:** none.
+
+## Round 49 — the commands and the schema against today's source (05:43–05:52 UTC)
+
+**Attack:** every command and flag the first week depends on, against the tools' current code, and Top 10 #4's
+schema advice against the real converter rather than its docs.
+- **Hermes:** `backup`, `prompt-size`, `tools`, `update`, `profile` and `config` are all registered built-in
+  subcommands on `main` (2026-10-13).
+- **llama.cpp** (`main`, 2026-10-14): `--fit`, `--fit-target` (MiB, so 1536 is right), `--n-cpu-moe`,
+  `--chat-template-file`, `--mmproj`, `-np` and `--jinja` all exist in `common/arg.cpp`.
+- **Upstream versions:** FilmCraft's latest tag is still v0.7.2. **Ollama is at v0.40.4**, while the tool-call evidence
+  in #14493 stops at v0.30.7 plus unversioned September comments: #7 now says so.
+- **The converter, built and run:** compiled a 10-line harness around llama.cpp's `json_schema_to_grammar` (its
+  Python converter is gone; only C++ remains) and fed it the guard's schema. Every bound became a grammar limit
+  (`char{0,400}`, `{0,4}` repeats after the first item, enum alternatives). **Correction:** Pydantic's raw schema with
+  two-level `$ref`s (Tool → ToolKind) converted correctly too, although the docs still say nested refs are broken
+  (issue 8073); the report had presented ref-inlining as the fix. The real gap the raw schema shows is Pydantic's
+  `list[str]`: each item becomes `"\"" char* "\""`, unbounded. The guard already bounded those; the report now
+  names that as the reason.
+- **Bug found in my own guard:** its output cap (700 tokens) was below the worst case its own schema allows (~4,000
+  characters; ~2,200 tokens counting Arabic at ~2 characters a token). A long but valid Arabic note would have been
+  cut off mid-JSON and reported "invalid". Added `output_budget()` (worst case from the schema's bounds, also lists
+  unbounded fields) and made it the default cap; the test asserts the shipped schema has no unbounded field and a
+  budget ≥ 1,500 tokens, and that the raw Pydantic schema is flagged for exactly its two unbounded list items.
+
+**Confidence changes:** #4 stays medium (nobody has run your prompts), but its schema advice is now tested against
+the real converter.
