@@ -1061,3 +1061,31 @@ takes the envelope's maximum over the 60 ms after each beat, so it works with ei
 asserts beats within 10 ms of the true kicks (22 ms median before the fix). Beat This, when installed, is untouched.
 
 **Confidence changes:** none; #6's statistics lose a systematic bias before you ever run them.
+
+## Round 47 — contradictions and stale text, from an independent hostile read (05:30–05:36 UTC)
+
+**Attack:** a separate reviewer read the whole report cold and listed contradictions, stale references, repetition
+and unsupported numbers (14 / 10 / 12 / 10 items). Fixed:
+- **Contradictions:** the plan is JSON everywhere (three places still said "plan in OTIO"; OTIO is only the export to
+  Resolve); Hermes runs your own `llama-server` behind llama-swap (2.2 still offered the managed runtime as equal);
+  Hermes reaches the vault through its bundled skill, other agents through MCPVault; the VLM is Q6_K at 8K (one table
+  said Q5); per-frame tokens are ~225 at 360×640, not 300–400; Laya's 0.766 and 0.790/0.772 are separate runs (now
+  said); FLUX fits 12 GB with fp8/GGUF files; the RAM need is 11–13 GB with the arithmetic shown; MiniMax's
+  territory clause is "confirmed", not "reportedly"; the shared-model candidates are Qwen3.6-35B-A3B or Gemma 4 12B in
+  all three places; the replay is three-way in #7, Day 4 and the YAML (new `agent-gemma` entry, config still valid);
+  #3's table now says "1 evening" and "high (method), medium (gain)"; Day 5 is labelled as *starting* #5 and #6;
+  "generated stills don't belong in paid clips" narrowed so it no longer contradicts the flyer bundle; "17+ Serato
+  reference grids" corrected to reference tracks (BPM and key; whatstheID stores no grid).
+- **Stale:** round count; a pointer to a "Top 10 tip in 2.1" that didn't exist; three places still framing #10 as
+  grid write-back; a "hand-back" reference; Serato 3.x `.session` history now said to be unsupported by Day 6's
+  script; `agent-small` gains a commented `--mmproj` (the report said Qwen3.5-9B reads images); three orphan source
+  links removed; reader-facing "round N" tags removed (the audit log keeps them); "~200 lines" → ~240.
+- **Unsupported numbers:** "48k open issues", "hundreds of PRs in October", "~1,000 labels", MiniCPM's 73.5
+  Video-MME and Beat This's "~78 MB" removed or reworded; "104–110 °C" now attributed to forum reports with the pad-mod
+  source; `-lgc 210,1700` explained; the ±8 % tied to a Technics-style pitch fader; the $150–400 agent-setup figure
+  traced to a promotional OpenClaw income guide (linked, labelled) plus a ~500-yuan on-site figure.
+- **What I got wrong** re-picked: Laya's epochs advice (backwards) merged into the Laya item; the rb2serato item
+  rewritten around FLAC, the missing anchor, Windows, the grids-vs-cues framing and the synthetic-kick detector;
+  the numbers item extended with the untraceable Gemma speed and the stale Scribe price.
+
+**Not yet done:** cutting repetition; the report grew to 19.7k words while fixing. Next round cuts.

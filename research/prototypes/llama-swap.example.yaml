@@ -39,13 +39,25 @@ models:
       # --mmproj C:/ai/models/mmproj-Qwen3.6-35B-A3B-BF16.gguf
     ttl: 900
 
-  # Fallback daily driver if RAM is 16 GB: dense, fully on the GPU. Also A/B Gemma 4 12B here
-  # (Apache-2.0, native tool calls, ~8 GB at 16K): swap the -m path to its Q4 QAT GGUF.
+  # Fallback daily driver if RAM is 16 GB: dense, fully on the GPU.
   "agent-small":
     cmd: |
       ${llama}
       -m C:/ai/models/Qwen3.5-9B-Q5_K_M.gguf
-      -c 65536
+      -c 65536 -np 1
+      # Qwen3.5 is multimodal: uncomment with the projector from the same GGUF repo for images
+      # --mmproj C:/ai/models/mmproj-Qwen3.5-9B-F16.gguf
+    ttl: 900
+
+  # The challenger in Day 4's replay (Apache-2.0, native tool calls; ~8 GB at 16K by a VRAM
+  # calculator, so expect more at 64K: lower -c if it doesn't fit). File names from
+  # ggml-org/gemma-4-12B-GGUF; the ~175 MB projector lets it read frames too.
+  "agent-gemma":
+    cmd: |
+      ${llama}
+      -m C:/ai/models/gemma-4-12B-Q4_K_M.gguf
+      -c 65536 -np 1
+      # --mmproj C:/ai/models/mmproj-gemma-4-12B-f16.gguf
     ttl: 900
 
   # Vision for Reel Brain and Creative Studio defect checks. 4-bit quants loop more, but Q8 does
@@ -98,6 +110,7 @@ profiles:
     pins:
       "agent": ~
       "agent-small": ~
+      "agent-gemma": ~
       "vlm": ~
       "vlm-glm": ~
       "asr-eg": ~
@@ -111,4 +124,4 @@ routing:
         "gpu":
           swap: true        # one member at a time
           exclusive: true   # loading a member unloads other groups too
-          members: ["agent", "agent-small", "vlm", "vlm-glm", "asr-eg", "comfyui_auto"]
+          members: ["agent", "agent-small", "agent-gemma", "vlm", "vlm-glm", "asr-eg", "comfyui_auto"]
