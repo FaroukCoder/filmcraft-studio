@@ -742,11 +742,11 @@ the confusions. The test asserts the tool's behaviour, not that the probe wins: 
 native function calling, 256K context. Reported ~7.8 GB at 16K context and ~90 tok/s on a 12 GB card, so it runs
 entirely on the GPU: no expert offload, no RAM pressure, faster prefill (which matters after every llama-swap swap).
 Hermes-specific signals favour the family: issue #29677's title says Qwen/DeepSeek output corrupts where "Gemma works
-with same config", and Hermes' local guide names  its reliable tool-caller (the 31B doesn't fit 12 GB).
+with same config", and Hermes' local guide names `gemma4:31b` its reliable tool-caller (the 31B doesn't fit 12 GB).
 No published tool-calling scores for the 12B (one aggregator's TAU2 figure for the 26B-A4B was unsourced).
 
 **Change:** added as the challenger in Top 10 #7's replay (now three-way: your current setup, Qwen3.6-35B-A3B,
-Gemma 4 12B), in the models table and as a comment on  in the llama-swap example (still validates).
+Gemma 4 12B), in the models table and as a comment on `agent-small` in the llama-swap example (still validates).
 Not a replacement: no evidence yet that it beats Qwen3.6 on your tools.
 
 **Confidence changes:** Top 10 #7 stays medium; it now has a credible no-offload option if RAM or Qwen templates bite.
