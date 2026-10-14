@@ -670,3 +670,23 @@ steelman's "unconfirmed availability" is settled; free-tier video limits remain 
 
 **Confidence changes:** Top 10 #5 (seam) now tested on both builds; shot picking from "proposal" to "prototype,
 tested on synthetic footage" (medium: real club footage untested).
+
+## Round 27 — steelman the demoted house look; make its rhythm rules checkable (04:07–04:11 UTC)
+
+**Attack (steelman):** round 24 demoted "house look per client" for low confidence, but it is the only item aimed at
+your #1 Creative Studio problem ("output looks stock AI"). Is it demoted because it's wrong, or because it's hard
+to check?
+
+**Answer:** half of it can be checked. HyperFrames compositions declare timing (`data-start` / `data-duration`,
+relative starts like `"intro + 0.5"`) and animate with GSAP timelines (read HyperFrames' composition and lint docs).
+Built `prototypes/beat_lint.py`: clip starts/ends on the beat grid, `data-beat="bar"` titles on bar lines, GSAP
+tween positions on beats, plus two motionmaxxing tells (in-out eased moves, typed-out text). Exit code 1 on findings,
+so it drops into your motion-graphics QA step. Its test composition covers on/off-grid clips, a bar miss, relative
+starts, an opt-out, an off-beat tween, an in-out slide vs an out-eased move, and a typewriter.
+- **Caught while building:** a regex that stopped at the first `)` (broken by `document.querySelector("#x")`);
+  replaced with a bracket-matching scanner. My test's expected offset was also wrong (150 ms, not 50).
+- **The taste half stays unverified.** Added a cheap way to settle it: a blind A/B with the collective; if the
+  house-look version wins, it returns to the Top 10.
+
+**Verdict:** stays out of the Top 10 (taste is still low confidence), but it now has a tool and a test that could
+bring it back.
