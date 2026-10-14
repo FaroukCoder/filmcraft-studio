@@ -1172,3 +1172,16 @@ experts on the CPU prompt processing is the slow part. Added to #7; per-route pr
 The pp speed on your card is not known: the llama-server log's prompt-eval tok/s gives it on Day 3.
 
 **Confidence changes:** none.
+
+## Round 52 — better alternatives for the reframe's weak spot (05:58–05:58 UTC)
+
+**Attack:** #9's untested part is detection in dark, strobing footage. Searched for newer person tracking: open-source
+auto-reframe projects are still AutoFlip (legacy) and DIY MediaPipe crops; the new option is **SAM 3 / 3.1**
+(November 2025, Object Multiplex in March 2026), which tracks every instance of a text phrase through video. Read
+its LICENSE in the official repo: the **SAM License** grants royalty-free use including commercial, but it is custom:
+trade-control compliance, licence termination if you bring an IP claim against Meta, redistribution only under the
+same terms, so it can be called by Creative Studio but never shipped in the MIT/Apache fork. Needs CUDA ≥ 12.6;
+Windows support is not stated. Added to #9 as the fallback if pose drops out, and to 2.1's pose line. Not tested here
+(no weights reachable: Hugging Face is blocked).
+
+**Confidence changes:** none.
