@@ -54,7 +54,7 @@ def main() -> int:
         qf.write_text(json.dumps(q), encoding="utf-8")
         laya_eval.main([f.name, "--export-rows", str(out), "--questions", str(qf), "--qid", "route"])
         first = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
-        if set(first) != {"state", "questions", "expected"} or first["expected"]["route"] not in ROUTES:
+        if set(first) != {"state", "questions", "expected", "language"} or first["expected"]["route"] not in ROUTES:
             problems.append(f"bad export row: {first}")
         csv_out = Path(d) / "routes.csv"
         laya_eval.main([f.name, "--export-csv", str(csv_out)])
@@ -63,6 +63,9 @@ def main() -> int:
             got = list(csv.DictReader(fh))
         if len(got) != 400 or set(got[0]) != {"text", "label"} or not any("الحفلة" in g["text"] for g in got):
             problems.append(f"bad CSV export: {len(got)} rows, first {got[:1]}")
+    langs = {laya_eval.language(x): x for x in ["fix the bug in hermes", "الحفلة بدأت يا جماعة", "cut a reel from الحفلة"]}
+    if set(langs) != {"en", "ar", "mixed"}:
+        problems.append(f"language tags: {list(langs)}")
     print("FAIL\n  " + "\n  ".join(problems) if problems else "PASS")
     return 1 if problems else 0
 

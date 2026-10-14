@@ -24,7 +24,10 @@ Then fine-tune on your own GPU or CPU with Laya's `laya-train` (laya >= 0.4):
 values). `--export-rows` writes Laya's JSONL case format, one line per message:
 {"state": <message>, "questions": <your question set>, "expected": {<qid>: <label>}};
 use it when your question has written criteria per option. (Laya's `gold` field is for teacher
-probabilities, not plain labels.)
+probabilities, not plain labels.) The same rows, with a `language` tag added, are what Laya's own
+evaluation harness reads, so before and after a fine-tune:
+
+    laya-evals run train_rows.jsonl --model ./laya-routes --slice language --max-ece 0.1 --json after.json
 """
 from __future__ import annotations
 
@@ -115,6 +118,16 @@ def report(rows: list[dict], embed: str | None = None) -> dict:
     return out
 
 
+def language(text: str) -> str:
+    """'ar', 'en' or 'mixed' by script share, so laya-evals can report Arabic and English
+    separately (`--slice language`): a router can be fine on one and poor on the other."""
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return "en"
+    ar = sum("\u0600" <= c <= "\u06ff" or "\u0750" <= c <= "\u077f" for c in letters) / len(letters)
+    return "ar" if ar > 0.7 else "en" if ar < 0.1 else "mixed"
+
+
 def export_rows(rows: list[dict], questions: dict, qid: str, out_path: str) -> int:
     if qid not in questions:
         raise SystemExit(f"question id {qid!r} not in the questions file")
@@ -124,8 +137,8 @@ def export_rows(rows: list[dict], questions: dict, qid: str, out_path: str) -> i
         for r in rows:
             if allowed and r["label"] not in allowed:
                 continue  # a label your question doesn't offer can't be learned
-            fh.write(json.dumps({"state": r["text"], "questions": questions, "expected": {qid: r["label"]}},
-                                ensure_ascii=False) + "\n")
+            fh.write(json.dumps({"state": r["text"], "questions": questions, "expected": {qid: r["label"]},
+                                 "language": language(r["text"])}, ensure_ascii=False) + "\n")
             n += 1
     return n
 

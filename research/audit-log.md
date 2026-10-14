@@ -553,3 +553,26 @@ other parser expect, and what licences the write path drags in.
 - Prototypes' own dependencies checked: all permissive; stated in the prototypes README.
 
 **Kills:** the plan to add a Serato grid writer prototype to the fork. **Confidence changes:** none.
+
+## Round 21 — Hermes + Laya: what the tools already ship (03:46–03:48 UTC)
+
+**Attack:** "your router logs decisions for later fine-tuning", so does Laya or Hermes already ship that loop, and
+can a route actually change anything inside Hermes?
+
+- **Laya ships the loop.** `docs/staged-adoption.md`: shadow with prediction hooks (`Router(hooks=[...])`,
+  `on_predict_end`), compare against the incumbent, set the threshold from held-out data, promote one route at a
+  time. `laya-evals run … --slice language --max-ece … --json` plus `laya-evals compare --baseline` records the
+  checkpoint, dataset hash and thresholds, so a before/after is honest. Its dataset rows are the
+  `{state, questions, expected}` rows `laya_eval.py` exports; the export now adds a `language` tag (ar / en / mixed),
+  so Arabic and English routing are scored separately. Test extended; passes.
+- **Hermes can't switch models from a plugin.** `pre_llm_call` only injects context and `pre_tool_call` only
+  blocks/approves (plugin docs). A route has to act in front of Hermes. Added the payoff that matters on 12 GB:
+  route to Hermes profiles with trimmed toolsets, since the fixed prompt's prefill dominates the first turn on
+  low-VRAM setups (Hermes' local-setup guide, now quoted exactly) and recurs after every llama-swap swap.
+- **Hermes' auxiliary slots** (compression, vision, approval scoring, MCP routing, titles, skill search, curator)
+  default to the main model; keep them there so side-jobs don't swap models.
+- **Claim tightened:** "prefill dominates first-token time on local models" was a paraphrase; the source says "the
+  first turn" on CPU-only or low-VRAM setups. Both mentions now say that.
+
+**Kills:** none. **Confidence changes:** Top 10 #2 stays high; it now ends in a measured promotion step instead of
+"keep whichever wins".
