@@ -2,7 +2,8 @@
 
 Small, standalone Python scripts behind the Top 10 moves in `../projects-research.md`.
 Each has a test that builds synthetic input (no GPU, no model downloads) and checks
-the result. They were written and tested in a Linux container on 2026-10-14; they
+the result; `test_plan_to_filmcraft.py` also needs ffmpeg and a `filmcraft-cli` built from your fork
+(set `FILMCRAFT_CLI`), and prints SKIP without one. They were written and tested in a Linux container on 2026-10-14; they
 use only cross-platform calls (pathlib, `subprocess` with argument lists, no shell)
 and should run on Windows, but **nobody has run them on Windows yet**.
 
@@ -14,6 +15,7 @@ and should run on Windows, but **nobody has run them on Windows yet**.
 | `l1_reframe_path.py` | #9 | L1-optimal (Grundmann et al.) 9:16 crop path from noisy subject positions | 20 s DJ, 15 px jitter, 10 % missed detections: 83.6 % of frames static, 0 direction changes, subject in frame 100 %; an EMA follow: 11.5 % static, 189 direction changes. Solves 600 frames in 0.2 s |
 | `dj_guard.py` | #6 | Unloads llama-swap/ComfyUI and stops GPU services while Serato or Ableton runs; `gpu_allowed()` for batch jobs | Stand-in app process: unload called, lock written, cleared after the grace period |
 | `laya_eval.py` | #2 | Accuracy per route, confusions, calibration (ECE), confidence gate, a cheap baseline on the same labels; exports a CSV for `laya-train` or Laya's JSONL cases | Router right 41 % at ~0.9 confidence: ECE 0.49 flagged; TF-IDF baseline 100 % on the learnable synthetic routes |
+| `plan_to_filmcraft.py` | Creative Studio | Edit plan (JSON) → your FilmCraft fork, headless over MCP: 9:16 sequence, cuts from two cameras, L1 reframe written as Motion anchor keyframes, set audio, captions, H.264 export | Real `filmcraft-cli` build, two synthetic cameras, noisy gappy detections: cuts on the planned frames (90/135/225), subject fully in frame 100 % of reframed frames (centre crop: 34 %), 8–14 keyframes per shot, captions burned in, audio present. Test prints SKIP without a build |
 | `filmcraft_arabic_captions.jsonl` | #8 | Headless FilmCraft run: import an Arabic SRT, set an Arabic caption font, export with captions burned in | Built the fork's `filmcraft-cli` (Linux): default font gives "NO GLYPH" boxes; with Noto Sans Arabic named, joined letters in correct right-to-left order |
 | `llama-swap.example.yaml` | #6 | One exclusive GPU group: agent, small agent, two VLMs, Egyptian-Arabic ASR, ComfyUI | YAML parses; group members match model ids (not run: llama-swap is a Go binary I couldn't download here) |
 

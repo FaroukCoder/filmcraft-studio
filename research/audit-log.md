@@ -479,3 +479,33 @@ Egyptian code-switched caption into a headless export.
   upstream as of 2026-10-13.
 
 **Confidence changes:** Arabic captions in FilmCraft: low → high (tested). Top 10 #8 unchanged (still low: taste).
+
+## Round 18 — Creative Studio deep dive: the planner → FilmCraft seam, built and tested (03:22–03:40 UTC)
+
+**Attack:** the report told you to have an LLM plan drive the FilmCraft fork, but nothing had shown the fork can
+take a plan and produce a 9:16 clip with cuts, reframe, captions and audio. Built it instead of asserting it.
+
+**Built:** `prototypes/plan_to_filmcraft.py`: an MCP client for `filmcraft-cli mcp` (stdio JSON-RPC) that turns a
+plan JSON into a sequence and an export. `test_plan_to_filmcraft.py` runs it against the real release build of
+your fork with two synthetic cameras, a set recording, noisy and gappy subject detections and an Arabic/English SRT.
+Result: 1080×1920, 270 frames, cuts on frames 90/135/225 exactly, audio present, captions burned in, subject
+fully in frame on 100 % of reframed frames (centre crop: 34 %), 8–14 keyframes per shot.
+
+**What testing found that reading didn't**
+- Motion `anchor` is in source pixels and `position` in sequence pixels: a reframe is anchor keyframes, nothing else.
+- `effects.setKeyframe` only edits existing keyframes; `effects.setParam {"keyframe": true, "time": ticks}` creates
+  them. A static `filmcraft-cli run` script can't use the IDs commands return, so drive the MCP server.
+- **My keyframe reducer was wrong:** keeping only frames where the slope jumps gave a smooth curve two keyframes
+  and the subject left the frame mid-shot. Replaced with Douglas–Peucker (≤ 3 px error).
+- **My L1 prototype's default margin was wrong for bodies:** the path constrains the subject's centre, so a 60 px
+  margin let a 160 px-wide subject clip the frame edge on 9 % of frames. Margin now = half the subject's width +
+  20 px (`--subject-width`, default 200 px), in both scripts.
+- The test runner now accepts SKIP (no FilmCraft build on the machine); all seven tests pass here.
+
+**Report changes:** Top 10 #9 gets the FilmCraft side and the margin pitfall; 2.1 gets the seam as an adopted
+piece; "write the plan as OTIO" became "keep the plan tool-neutral JSON; use FilmCraft's `file.exportOtio` for the
+Resolve fallback" (OTIO can't carry the keyframes and captions the plan needs); week 2 starts with a real clip end
+to end.
+
+**Confidence changes:** "an LLM plan can drive the fork" from assumed to tested on synthetic footage (medium →
+high for the mechanics; footage quality still untested).

@@ -15,9 +15,11 @@ def main() -> int:
         t0 = time.time()
         res = subprocess.run([sys.executable, str(test)], capture_output=True, text=True, cwd=HERE)
         last = (res.stdout.strip().splitlines() or ["(no output)"])[-1]
-        ok = res.returncode == 0 and last.startswith("PASS")
+        skipped = res.returncode == 0 and last.startswith("SKIP")
+        ok = res.returncode == 0 and (last.startswith("PASS") or skipped)
         failed += not ok
-        print(f"{'PASS' if ok else 'FAIL'}  {test.name:38s} {time.time() - t0:5.1f}s")
+        status = "SKIP" if skipped else "PASS" if ok else "FAIL"
+        print(f"{status}  {test.name:38s} {time.time() - t0:5.1f}s" + (f"  ({last[4:].strip()})" if skipped else ""))
         if not ok:
             print(res.stdout[-1500:], res.stderr[-1500:], sep="\n")
     return 1 if failed else 0

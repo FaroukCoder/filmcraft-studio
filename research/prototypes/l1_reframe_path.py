@@ -91,13 +91,17 @@ def main(argv=None) -> int:
     ap.add_argument("centers")
     ap.add_argument("--frame-width", type=float, default=1920)
     ap.add_argument("--crop-width", type=float, default=608, help="1080 px tall source -> 608 px wide 9:16 crop")
-    ap.add_argument("--margin", type=float, default=60)
+    ap.add_argument("--margin", type=float, default=None,
+                    help="safe-zone margin in px; the path keeps the subject's CENTRE inside, so use at least half "
+                         "the subject's width + 20 (default: --subject-width / 2 + 20)")
+    ap.add_argument("--subject-width", type=float, default=200, help="subject width in source px (a DJ's body)")
     args = ap.parse_args(argv)
     vals = []
     for line in open(args.centers, encoding="utf-8"):
         line = line.strip()
         vals.append(float(line) if line and line.lower() != "nan" else np.nan)
-    path = l1_path(np.array(vals), args.frame_width, args.crop_width, args.margin)
+    margin = args.margin if args.margin is not None else min(args.subject_width / 2 + 20, args.crop_width / 2 - 1)
+    path = l1_path(np.array(vals), args.frame_width, args.crop_width, margin)
     for p in path:
         print(f"{p:.2f}")
     print(describe(path), file=sys.stderr)
