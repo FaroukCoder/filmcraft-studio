@@ -1255,3 +1255,14 @@ transparent and the first run looked like "neither works". Checking the fixture'
 media can't be decoded (round 55's silent MEDIA UNREADABLE card).
 
 **Confidence changes:** none.
+
+## Round 57 — the Resolve escape hatch, exported and read back (06:13–06:14 UTC)
+
+**Attack:** "FilmCraft's `file.exportOtio` writes the timeline as OpenTimelineIO, which Resolve imports, so a
+broken Windows build costs a day" had never been run. Built a 1080×1920 sequence with three cuts from two cameras
+(A 0–3 s from source 1 s, B 3–4.5 s from 5 s, A 4.5–8 s from 6 s) in v0.7.2, exported OTIO, and read it with the
+official `opentimelineio` 0.18.1: every clip's source-in, duration and position came back exact. One practical
+catch: the media references are bare file names (`camA.mp4`), no paths, so the `.otio` must sit beside the media or
+Resolve will ask to relink. Added to 2.1. (Resolve's own import not tested: no Resolve here.)
+
+**Confidence changes:** none.
