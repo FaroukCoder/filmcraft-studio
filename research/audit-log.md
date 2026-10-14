@@ -406,3 +406,76 @@ checked:
 in path 2; an uncertainty row on the caption edge.
 
 **Confidence changes:** money path 2 moves from medium to low until the competitor comparison is done.
+
+## Round 15 — second link and claim check (03:08–03:16 UTC)
+
+**Attack:** every link added since round 8, and re-read the issues the top 10 leans on.
+
+**Links:** all 49 GitHub repos resolve (`git ls-remote`); every GitHub blob/tree path checked against a clone;
+new non-GitHub links came from today's search results. One failed: the "DigitalWorkflowCompany/resolve-mcp, 88
+tools" listing could not be found again; replaced with a Glama listing that exists (irstone-source/resolve-mcp,
+MIT, 295+ tools) and the range "53 to 295+ tools" across listings. Puget's and Digital Production's Resolve 21.1
+articles, AudD's enterprise docs and tldraw's agent kit all confirmed.
+
+**What broke (Laya, Top 10 #2, two errors including one backwards)**
+- **Epochs: I said "fewer epochs on small data"; the issue says the opposite.** Laya #963: the fixed 4-epoch
+  default gives a small dataset too few optimizer updates and the head collapses to the class prior; the reporter's
+  useful epoch was 17–31, and 6 of 15 identical runs never left the plateau. Fixed: read the update budget from
+  `--dry-run`, raise `--epochs`, repeat with seeds, use the positive control from `docs/finetune.md`.
+- **Router: I said custom checkpoints can't be served through the Router (#919).** They can since 0.3.28
+  (`Router(models=...)`, `Router.register`) and `laya-serve` reads `LAYA_EXTRA_MODELS` since 0.4.1; only routing by
+  content is still open.
+- **Missed tool:** Laya 0.4 ships `laya-train`, a one-command fine-tune from a CSV on one device (CUDA, CPU, MPS)
+  that also fits calibration and abstention thresholds. Kaggle is no longer needed, so messages never leave the PC.
+  `--loss soft-ce` beat the default on Laya's own benchmark (0.790 vs 0.772). Confirmed `laya` 0.4.6 on PyPI.
+- **Prototype bug:** `laya_eval.py --export-rows` wrote `gold: {qid: label}`; in Laya's format `gold` is teacher
+  probabilities and plain labels go in `expected`. Fixed, added `--export-csv` for `laya-train`, test extended
+  (CSV row count, Arabic text survives); all six prototype tests pass.
+
+**Confirmed unchanged:** Hermes #110442 (rename PR #110452 still open), #129440 (1 of 23 figure is in it, one
+install over ~1 day), #29677 (open; workaround from a commenter, not a maintainer), Ollama #14493 (open).
+
+**Confidence changes:** Top 10 #2 stays high and gets cheaper (no Kaggle, no export format to hand-build).
+
+## Round 16 — whatstheID and Inspiration Canvas (03:16–03:19 UTC)
+
+**Attack:** does Top 10 #10 (Serato write-back) work for *your* case, and are the canvas import routes real?
+
+**What broke**
+- **Top 10 #10 only covered tracks Serato imports fresh.** rb2serato's flow relies on Serato 4 re-importing
+  `database V2` and crates at start-up (Serato closed while writing). Nobody documents whether Serato 4 re-reads a
+  rewritten `Serato BeatGrid` tag on a track already in its library; serato-tools edits `database V2` precisely so
+  metadata changes appear "without Reload ID3 Tags", which suggests caching. whatstheID's use is exactly that case.
+  First step now tests both (a copy, and a known track) on a backed-up library.
+- serato-tools: dynamic (multi-marker) grids from a librosa analysis (source MIT, heyitsmass/audio); it edits
+  Serato 3's `database V2`, not Serato 4's SQLite. Noted.
+- **Audit-log context said the fingerprint speed ladder is ±4 %; the code says ±8 % in 1 % steps.** Fixed (the
+  report already said ±8 %).
+- **Reel Brain:** the "use Instagram's export" advice is unverified at field level (third-party guides only) and the
+  fetch step needs throttling if yt-dlp uses your cookies. Added both.
+
+**Kills:** none. **Confidence changes:** Top 10 #10 stays medium but its effort estimate is now conditional.
+
+## Round 17 — security, and FilmCraft's Arabic captions tested (03:16–03:21 UTC)
+
+**Attack 1, security:** Reel Brain writes strangers' text (captions, transcripts, OCR) into the vault; Hermes reads
+the vault with a shell, MCP tools and a Telegram front door. Added cross-project piece 8: `TELEGRAM_ALLOWED_USERS`,
+`approvals.mode` smart/manual (never `/yolo` on the gateway), `cron_mode: deny`, a `--read-only` MCPVault instance
+for agents that only read, reel notes in their own folder marked untrusted, and "a repo from a reel is a lead, not
+an install". All of these are documented features (Hermes `security.md`, MCPVault README).
+
+**Attack 2, test instead of trusting a bug title:** built the fork's `filmcraft-cli` (release, 5 min) and burned an
+Egyptian code-switched caption into a headless export.
+- Default caption font (Inter): every Arabic letter is a "NO GLYPH" box, **even with Noto Sans Arabic installed**:
+  the fallback only searches bundled/craft-fonts/already-loaded faces. Matches upstream #1475 (open; fix PR #1478).
+- `captions.setStyle {"font": "Noto Sans Arabic"}`: correct output (joined letters, right-to-left order, the Latin
+  word at the left end).
+- **Reversed:** "render Arabic in the HTML layer because FilmCraft can't" (from #395's title; its merged fix #1140
+  was UI-only). Now: name an Arabic face on the caption track. Committed the run script as
+  `prototypes/filmcraft_arabic_captions.jsonl` (re-run from that file: identical output). The two frames are not
+  committed (the fork's asset gate requires licence sidecars for images); they go with the hand-back.
+- Also confirmed: `file.exportMedia` takes h264 / width / height / CRF / `loudnessLufs` / `burnCaptions` /
+  hardware encoding, and `filmcraft-cli run` executes a JSONL command script headless. The fork is 433 commits behind
+  upstream as of 2026-10-13.
+
+**Confidence changes:** Arabic captions in FilmCraft: low → high (tested). Top 10 #8 unchanged (still low: taste).
