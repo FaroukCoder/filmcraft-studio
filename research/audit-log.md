@@ -17,7 +17,7 @@ Session started 2026-10-14 01:48 UTC. Report: `projects-research.md` (same folde
   the Karpathy "LLM wiki" pattern (`claude-obsidian` fork). So a vault memory layer already exists.
 - Creative Studio, Hermes/Laya and Reel Brain code is not on GitHub; judged from your description only.
 
-## Round 1 — breadth (01:48–02:15 UTC)
+## Round 1 — breadth (01:48–02:12 UTC)
 
 **Searched:** auto-editing and beat-sync tools, beat/downbeat trackers, multicam selection research, reframing,
 motion-graphics renderers, image/video model licences, local models for 12 GB, Hermes docs (sparse clone of
@@ -48,4 +48,23 @@ remain unread: every licence claim that depends on one is marked medium confiden
 - HyperFrames vs your existing HTML→alpha renderer: what does it actually add?
 - Verify MiniMax H3 licence and 12 GB feasibility claims; verify the IEEE CLIP+SVM paper date.
 - Find evidence (not opinion) on how reference clips are cut.
+
+**Late round-1 additions (after the first commit)**
+- **Laya is `NandhaKishorM/laya`** (found via a podcast-editor repo that embeds it). Its README says the base
+  checkpoints are near chance zero-shot (0.36 vs 0.32 random) and over-confident (ECE 0.47). My first draft told
+  you to "measure first, then maybe replace with EmbeddingGemma + logistic regression" without knowing what Laya was.
+  Rewritten: Laya is designed to be fine-tuned; the move is labels → fine-tune (Kaggle 2×T4) → calibrate, with the
+  logistic baseline kept in shadow. Promoted to Top 10 #2.
+- **FilmCraft Arabic titles are reported broken upstream (#395, open).** Changes where Arabic captions get rendered
+  (HTML layer) for the podcast-clip money path.
+- **Egyptian Arabic ASR:** QwenCleo-ASR (Apache-2.0) reports 19.9 % WER vs 63.9 % for Whisper large-v3 on an
+  Egyptian + code-switching set (self-reported). Added to Creative Studio, Reel Brain and money.
+- **Auto-posting:** TikTok unaudited clients and unverified YouTube API projects can only post private videos.
+  "Auto-post" needs audits or stays manual on those platforms.
+- **whatstheID competitors exist** (TrackSniff, Mixprism, audioscout.io, AudD). Sharing it publicly is only worth
+  it on the angle nobody else has: matching against the DJ's own library and writing Serato grids.
+- **Inspiration Canvas:** Eagle ($34.95 one-time) added as the paid option that may simply win; Allusion
+  (open-source Eagle clone) is dead since 2023.
+- Top 10 reshuffled: virality and Reel Brain classification moved into their project sections; Laya (#2) and a
+  "house look" move (#8, low confidence) added.
 
