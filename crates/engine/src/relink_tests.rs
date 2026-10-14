@@ -222,7 +222,7 @@ fn export_names_the_offline_media_it_rendered() {
         .execute("file.exportMedia", json!({"path": out("b.png"), "format": "png", "range": "custom", "startSeconds": 0.6, "endSeconds": 0.65, "wait": true}))
         .unwrap();
     assert_eq!(r["offlineMedia"], json!([]), "{r}");
-    let r = s.execute("file.exportMedia", json!({"path": out("all.wav"), "format": "wav", "wait": true})).unwrap();
+    let r = s.execute("file.exportMedia", json!({"path": out("all.wav"), "format": "wav", "wait": true, "allowOffline": true})).unwrap();
     let off = r["offlineMedia"].as_array().unwrap();
     assert_eq!(off.len(), 1, "{r}");
     assert_eq!(off[0]["item"], json!(items[0].0));
@@ -232,7 +232,10 @@ fn export_names_the_offline_media_it_rendered() {
     // made offline on purpose
     s.execute("media.makeOffline", json!({"items": [items[1].0]})).unwrap();
     let r = s
-        .execute("file.exportMedia", json!({"path": out("b2.png"), "format": "png", "range": "custom", "startSeconds": 0.6, "endSeconds": 0.65, "wait": true}))
+        .execute(
+            "file.exportMedia",
+            json!({"path": out("b2.png"), "format": "png", "range": "custom", "startSeconds": 0.6, "endSeconds": 0.65, "wait": true, "allowOffline": true}),
+        )
         .unwrap();
     assert_eq!(
         r["offlineMedia"].as_array().map(|a| a.iter().map(|o| (o["item"].clone(), o["status"].clone())).collect::<Vec<_>>()),
@@ -264,9 +267,42 @@ fn jobs_list_reports_an_exports_offline_media() {
     std::fs::remove_file(root.join("Media/b.mov")).unwrap();
     let mut s = open(&path);
     let out = root.join("all.wav").to_string_lossy().into_owned();
-    let job = s.execute("file.exportMedia", json!({"path": out, "format": "wav", "wait": true})).unwrap()["job"].clone();
+    let job = s.execute("file.exportMedia", json!({"path": out, "format": "wav", "wait": true, "allowOffline": true})).unwrap()["job"].clone();
     let jobs = s.execute("jobs.list", json!({})).unwrap();
     let j = jobs.as_array().unwrap().iter().find(|j| j["id"] == job).unwrap();
     assert_eq!(j["offlineMedia"][0]["item"], json!(items[1].0), "{j}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An export that drew placeholder frames for offline media fails unless `allowOffline` accepts
+/// it: waited for (`file.exportMedia` errors) and polled (the job's result is an error, which is
+/// what MCP `command_run` and the bridge report). Before, both said it succeeded.
+#[test]
+fn export_of_offline_media_fails_unless_allowed() {
+    let root = tmp_dir("relink-export-offline-fails");
+    let (path, items) = saved_project(&root);
+    std::fs::remove_file(root.join("Media/b.mov")).unwrap();
+    let mut s = open(&path);
+    let out = root.join("all.wav").to_string_lossy().into_owned();
+    let e = s.execute("file.exportMedia", json!({"path": out, "format": "wav", "wait": true})).unwrap_err().to_string();
+    assert!(e.contains("b.mov") && e.contains("missing") && e.contains("allowOffline"), "{e}");
+    let jobs = s.execute("jobs.list", json!({})).unwrap();
+    let j = jobs.as_array().unwrap().last().unwrap();
+    assert!(j["result"]["error"].as_str().is_some_and(|e| e.contains("b.mov")), "{j}");
+    assert_eq!(j["offlineMedia"][0]["item"], json!(items[1].0), "{j}");
+    // not waited for: the job fails the same way
+    let job = s.execute("file.exportMedia", json!({"path": out, "format": "wav"})).unwrap()["job"].clone();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let j = loop {
+        let jobs = s.execute("jobs.list", json!({})).unwrap();
+        let j = jobs.as_array().unwrap().iter().find(|j| j["id"] == job).unwrap().clone();
+        if j["finished"] == json!(true) || std::time::Instant::now() > deadline {
+            break j;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert!(j["result"]["error"].as_str().is_some_and(|e| e.contains("b.mov")), "{j}");
+    // media outside the exported range does not fail it (a.mov: frames 0..12)
+    s.execute("file.exportMedia", json!({"path": out, "format": "wav", "range": "custom", "startSeconds": 0, "endSeconds": 0.2, "wait": true})).unwrap();
     let _ = std::fs::remove_dir_all(&root);
 }

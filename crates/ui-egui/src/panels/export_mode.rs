@@ -137,7 +137,9 @@ pub fn output_path(ex: &ExportUi) -> String {
 /// Engine params for the current settings (`file.exportMedia` / `export.queue.add`).
 pub fn export_params(app: &FilmcraftApp) -> Value {
     let ex = &app.ui.export;
-    let mut p = json!({"path": output_path(ex), "settings": settings_json(&ex.settings), "range": ex.range});
+    // The monitors and the Project panel already show offline media here, so the export renders
+    // its slate as before instead of failing (agents get the failure: `allowOffline` is off there).
+    let mut p = json!({"path": output_path(ex), "settings": settings_json(&ex.settings), "range": ex.range, "allowOffline": true});
     if ex.range == "custom" {
         p["startSeconds"] = json!(ex.custom_start);
         p["endSeconds"] = json!(ex.custom_end);

@@ -431,6 +431,8 @@ async fn cli() {
             if let Some(v) = a.opt("--gpu-rendering") {
                 p["gpuRendering"] = json!(v); // off | auto (validated by the export command)
             }
+            // the CLI applies --allow-offline itself (check_offline: warn, keep the file, exit 1)
+            p["allowOffline"] = json!(true);
             let mut b = Backend::open(&a);
             let t0 = std::time::Instant::now();
             let r = if a.flag("--queue") {

@@ -667,3 +667,33 @@ fn default_export_dir_never_needs_a_real_filesystem() {
     let s = Session { path: Some("/projects/show/edit.fcproj".into()), ..Default::default() };
     assert_eq!(crate::export_tools::default_export_dir(&s), std::path::PathBuf::from("/projects/show"));
 }
+
+/// 10-bit H.264 (FilmCraft decodes 8-bit 4:2:0 only) imports, and its frames render as the MEDIA
+/// UNREADABLE slate. `file.exportMedia` used to report that export as a success (with the item
+/// only listed in `offlineMedia`), so a headless caller shipped a red card as the finished video;
+/// it now fails naming the file and the decoder's reason, unless `allowOffline` accepts it.
+#[test]
+fn export_of_undecodable_h264_fails_unless_allowed() {
+    let Some(ffmpeg) = filmcraft_testkit::oracle::ffmpeg_or_skip("export_tests") else { return };
+    let path = filmcraft_testkit::fixtures_dir("engine/export").join("h264_10bit_64x32.mp4");
+    let Some(path) = filmcraft_testkit::fixtures::generate(&path, |tmp| {
+        std::process::Command::new(&ffmpeg)
+            .args(["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=64x32:rate=24:duration=0.5"])
+            .args(["-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p10le"])
+            .arg(tmp)
+            .status()
+            .is_ok_and(|s| s.success())
+    }) else {
+        return;
+    };
+    let dir = Scratch::new("undecodable");
+    let mut s = Session::default();
+    s.execute("file.newSequence", json!({"name": "S", "width": 64, "height": 32, "fps": 24})).unwrap();
+    let r = s.execute("file.import", json!({"paths": [path.to_string_lossy()]})).unwrap();
+    let item = r["items"][0].as_u64().unwrap();
+    s.execute("timeline.place", json!({"item": item, "track": "V1", "seconds": 0})).unwrap();
+    let e = s.execute("file.exportMedia", json!({"path": dir.path("out.png"), "format": "png", "wait": true})).unwrap_err().to_string();
+    assert!(e.contains("h264_10bit_64x32.mp4") && e.contains("unreadable") && e.contains("only 8-bit") && e.contains("allowOffline"), "{e}");
+    let r = s.execute("file.exportMedia", json!({"path": dir.path("ok.png"), "format": "png", "wait": true, "allowOffline": true})).unwrap();
+    assert_eq!(r["offlineMedia"][0]["status"], json!("unreadable"), "{r}");
+}

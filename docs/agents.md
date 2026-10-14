@@ -112,7 +112,11 @@ progress and stop it:
   polls, so other requests (`ping`, `doc_inspect`, `jobs.list`, …) are answered while it encodes.
 - `file.exportMedia` with `wait: true`, an export job in `jobs.list` and each `export.queue.list`
   item carry `offlineMedia`: the offline items the export drew the placeholder for (see §2b), `[]`
-  when none. The export itself still succeeds; deciding what to do about it is up to the caller.
+  when none. When it is not empty, `file.exportMedia` fails (`isError`, and the job's `result` is an
+  `error`) naming each item, why it is offline (the decoder's reason for unreadable media, such as
+  10-bit or 4:2:2 H.264) and what fixes it; the file is kept. `allowOffline: true` accepts the
+  placeholder frames and the export succeeds with `offlineMedia` listed. The export queue and Quick
+  Export still succeed and only list them.
 - Every job in `jobs.list`, and every encoding item of `export.queue.list`, carries `etaSeconds`: the
   time left at the job's speed over the last 15 seconds, `null` until a second of progress has been
   measured (a loudness pass, a seek) and once it is done. The app shows it as `37% · 2:05 left` in the

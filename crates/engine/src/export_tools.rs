@@ -424,7 +424,25 @@ fn write_sidecar(s: &Session, project: &Project, seq: ItemId, settings: &ExportS
 }
 
 /// Run an export of `seq` in `project` as a background job (or now, with `wait`); returns the job id.
-pub fn spawn_export(s: &mut Session, project: Arc<Project>, seq: ItemId, mut settings: ExportSettings, label: String, wait: bool) -> Result<u64> {
+/// The job lists the offline media it drew placeholder frames for (`offlineMedia`) and still
+/// succeeds; [`spawn_export_checked`] fails it instead.
+pub fn spawn_export(s: &mut Session, project: Arc<Project>, seq: ItemId, settings: ExportSettings, label: String, wait: bool) -> Result<u64> {
+    spawn_export_checked(s, project, seq, settings, label, wait, true)
+}
+
+/// [`spawn_export`]; with `allow_offline` false, a job that drew placeholder frames (the offline
+/// or MEDIA UNREADABLE slate, silence) for any item fails with an error naming each item, why it
+/// was offline and what to do about it (the file is kept), so a headless caller never mistakes
+/// the slate for the real picture.
+pub fn spawn_export_checked(
+    s: &mut Session,
+    project: Arc<Project>,
+    seq: ItemId,
+    mut settings: ExportSettings,
+    label: String,
+    wait: bool,
+    allow_offline: bool,
+) -> Result<u64> {
     let format = settings.format;
     if !filmcraft_export::available(format) {
         return Err(EngineError::Other(format!("{} export is not available (no encoder registered)", format.label())));
@@ -453,7 +471,12 @@ pub fn spawn_export(s: &mut Session, project: Arc<Project>, seq: ItemId, mut set
     }
     let run = move || {
         let r = filmcraft_export::export(&project, seq, &settings, &provider, &prog).map_err(|e| e.to_string());
-        *offline.lock().unwrap_or_else(|x| x.into_inner()) = provider.offline_used();
+        let used = provider.offline_used();
+        let r = match r {
+            Ok(_) if !allow_offline && !used.is_empty() => Err(placeholder_error(&settings.path, &used)),
+            r => r,
+        };
+        *offline.lock().unwrap_or_else(|x| x.into_inner()) = used;
         if let Err(e) = &r {
             *prog.error.lock().unwrap_or_else(|x| x.into_inner()) = Some(e.clone());
             prog.finished.store(true, Ordering::Relaxed);
@@ -468,6 +491,23 @@ pub fn spawn_export(s: &mut Session, project: Arc<Project>, seq: ItemId, mut set
         std::thread::Builder::new().name("filmcraft-export".into()).spawn(run).map_err(|e| EngineError::Other(e.to_string()))?;
     }
     Ok(id)
+}
+
+/// The error of an export that drew placeholder frames for `offline` while `allowOffline` was off:
+/// each item, why it was offline and what fixes it.
+pub(crate) fn placeholder_error(path: &str, offline: &[crate::media_pool::OfflineMedia]) -> String {
+    let mut msg = format!("{path} shows placeholder frames instead of {} media item(s):", offline.len());
+    for o in offline {
+        let fix = match o.status {
+            "unreadable" => "FilmCraft cannot decode it; transcode it to a supported format (for H.264: 8-bit, 4:2:0, progressive) and relink or re-import",
+            "missing" => "the file is not there; relink it (media.relink / media.autoRelink)",
+            _ => "it was made offline; relink it (media.relink) to bring it back online",
+        };
+        let why = if o.error.is_empty() { String::new() } else { format!(": {}", o.error) };
+        msg.push_str(&format!(" item {} \"{}\" ({}{why}) at {}; {fix}.", o.item, o.name, o.status, o.path));
+    }
+    msg.push_str(" Pass allowOffline: true to accept placeholder frames.");
+    msg
 }
 
 /// Last-resort guard for a background job body (export, previews, proxies, …): a panic marks the
@@ -504,8 +544,11 @@ pub fn export_media(s: &mut Session, p: &Value) -> Result<Value> {
     settings.range = range_param(s, &project, seq, p.get("range"), p, cmd)?;
     settings.path = output_path(s, p, seq, &settings, None);
     let wait = bool_p(p, "wait").unwrap_or(false);
+    // Off by default: a caller that cannot see the picture (MCP, the bridge, scripts) must not be
+    // told an export of the offline / MEDIA UNREADABLE slate succeeded.
+    let allow_offline = bool_p(p, "allowOffline").unwrap_or(false);
     let path = settings.path.clone();
-    let id = spawn_export(s, project, seq, settings, format!("Export {}", file_name(&path)), wait)?;
+    let id = spawn_export_checked(s, project, seq, settings, format!("Export {}", file_name(&path)), wait, allow_offline)?;
     let mut out = json!({"job": id, "path": path});
     if let Some(pr) = preset {
         out["preset"] = json!(pr.name);
