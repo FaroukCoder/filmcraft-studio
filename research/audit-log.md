@@ -716,3 +716,20 @@ reels. Synthetic test (1,000 items, 8 imbalanced folders, signal in 16 of 256 di
 the confusions. The test asserts the tool's behaviour, not that the probe wins: that is the question for your data.
 
 **Confidence changes:** none (Reel Brain classification stays medium until it runs on your data).
+
+## Round 30 — fast-techno downbeats (04:14–04:18 UTC)
+
+**Attack:** "BPM/downbeat accuracy on fast techno" is one of your open problems. Tempo is solved by your comb filter
+(0.01 BPM vs Serato); the report's downbeat advice was a sentence.
+- **Beat This could not be run here:** its weights are served from JKU's cloud, which this container can't reach.
+  Its Giant Steps numbers stay second-hand (from its issue tracker).
+- **Built `prototypes/downbeat_phase.py`** (phase of a 4/4 grid from backbeat claps + structure) and tested it on
+  synthetic 150 BPM techno with a breakdown, a drop and crashes, in three versions.
+- **What broke, and what it taught:** (1) claps alone scored beat 1 and beat 3 identically. That isn't a bug: a
+  backbeat on 2 and 4 is the same pattern shifted by two beats, so claps only separate {1,3} from {2,4}. The tool now
+  reports `half_bar_ambiguous` instead of guessing, and the report says so. (2) A per-beat change vote was too noisy
+  (it picked phase 3 with structure only); replaced with bar-level novelty, the standard structural cue. Result: right
+  phase 6/6 seeds with claps + structure and with structure alone; claps-only flagged ambiguous 6/6.
+- My first test expectation (claps alone should find the phase) was wrong for the same reason.
+
+**Confidence changes:** whatstheID downbeats from "advice" to "prototype tested on synthetic audio" (medium).
