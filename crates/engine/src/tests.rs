@@ -1012,6 +1012,60 @@ fn enable_flips_each_selected_clip() {
     assert_eq!((enabled(&s, a), enabled(&s, b)), (true, true));
 }
 
+/// A numeric `effect` that is not a whole, non-negative index (`1.5`, `-1`) used to address effect
+/// 0 (Motion), so `effects.setParam` changed Motion's Scale. It is "no such effect" now; `0.0` is
+/// still effect 0.
+#[test]
+fn effect_index_must_be_a_whole_non_negative_number() {
+    let mut s = demo();
+    let c = s.active_sequence().unwrap().video_tracks[0].items[0].id.0;
+    let scale = |s: &Session| {
+        let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1;
+        it.effect("motion").unwrap().params["scale"].value.clone()
+    };
+    let before = scale(&s);
+    for eff in [json!(1.5), json!(-1), json!(99)] {
+        let p = json!({"clip": c, "effect": eff, "param": "scale", "value": 50.0});
+        assert!(s.execute("effects.setParam", p.clone()).is_err(), "{p}");
+        assert_eq!(scale(&s), before, "{p} changed Motion");
+        for cmd in ["effects.toggleAnimation", "effects.resetParam", "effects.addKeyframe"] {
+            assert!(s.execute(cmd, json!({"clip": c, "effect": eff, "param": "scale"})).is_err(), "{cmd} {eff}");
+        }
+    }
+    let motion = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1.effects.iter().position(|e| e.effect == "motion").unwrap();
+    s.execute("effects.setParam", json!({"clip": c, "effect": motion as f64, "param": "scale", "value": 50.0})).unwrap();
+    assert_eq!(scale(&s), filmcraft_project::ParamValue::Float(50.0));
+}
+
+/// `timeline.place` took `sourceIn` / `duration` only as JSON integers and silently ignored
+/// anything else (a float such as `1.5`: the whole file was placed), and a duration under one
+/// frame (`duration: 5` meant as seconds) became a one-frame clip. Integral floats are ticks.
+#[test]
+fn place_refuses_bad_source_in_and_duration() {
+    let mut s = demo();
+    let item = s.active_sequence().unwrap().video_tracks[0].items[0].item;
+    let before = s.project.clone();
+    for params in [
+        json!({"item": item.0, "frame": 0, "duration": 1.5}),
+        json!({"item": item.0, "frame": 0, "duration": "2s"}),
+        json!({"item": item.0, "frame": 0, "duration": 5}),
+        json!({"item": item.0, "frame": 0, "duration": 0}),
+        json!({"item": item.0, "frame": 0, "duration": -254_016_000_000i64}),
+        json!({"item": item.0, "frame": 0, "sourceIn": 0.5}),
+        json!({"item": item.0, "frame": 0, "sourceIn": -1}),
+    ] {
+        let e = s.execute("timeline.place", params.clone()).expect_err(&params.to_string());
+        assert!(matches!(&e, EngineError::BadParams { cmd, .. } if cmd == "timeline.place"), "{params}: {e:?}");
+        assert_eq!(*s.project, *before, "{params}");
+    }
+    // a float that is a whole number of ticks (Python: secs * 254016000000.0) is ticks
+    let d = s.sequence_rate().tick_of(24);
+    let r = s.execute("timeline.place", json!({"item": item.0, "frame": 0, "sourceIn": 0.0, "duration": d.0 as f64})).unwrap();
+    let clip = filmcraft_project::ClipId(r["clips"][0].as_u64().unwrap());
+    let it = s.active_sequence().unwrap().find_item(clip).unwrap().1;
+    assert_eq!(it.duration, d);
+}
+
 /// Times before sequence start are unreachable in the GUI and cut off on export.
 #[test]
 fn negative_place_and_marker_times_are_refused() {

@@ -207,6 +207,24 @@ pub(crate) fn u64_p(p: &Value, k: &str) -> Option<u64> {
     p.get(k).and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)))
 }
 
+/// A numeric `effect` param: a non-negative whole number (`2.0` as many JSON clients send it), else
+/// None, so `1.5` or `-1` is "no such effect" rather than effect 0 (Motion).
+fn effect_index(n: &serde_json::Number) -> Option<usize> {
+    let i = n.as_u64().or_else(|| n.as_f64().filter(|f| f.is_finite() && f.fract() == 0.0 && *f >= 0.0 && *f <= u32::MAX as f64).map(|f| f as u64))?;
+    usize::try_from(i).ok()
+}
+
+/// A tick count param (`sourceIn`, `duration`): absent or null is None; anything else must be a
+/// whole number of ticks (an integral float such as `4.6e14` counts). A fraction, a string or a
+/// non-finite number is an error rather than being ignored.
+fn ticks_p(p: &Value, key: &str, cmd: &str) -> Result<Option<Tick>> {
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    v.as_i64()
+        .or_else(|| v.as_f64().filter(|f| f.is_finite() && f.fract() == 0.0 && *f >= i64::MIN as f64 && *f < i64::MAX as f64).map(|f| f as i64))
+        .map(|t| Some(Tick(t)))
+        .ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number of ticks (254016000000 per second), not {v}")))
+}
+
 /// Typed dimensions/counts must not truncate, wrap or silently accept negative/fractional values.
 /// Integer-valued floats (`1920.0`, as JSON from many clients) are integers.
 pub(crate) fn checked_u32_p(p: &Value, key: &str, cmd: &str) -> Result<Option<u32>> {
@@ -2329,8 +2347,22 @@ fn build() -> Vec<CommandSpec> {
                     ItemKind::Subclip { range, .. } => (Some(range.start), Some(range.end())),
                     _ => (None, None),
                 };
-                let sin = p.get("sourceIn").and_then(Value::as_i64).map(Tick).or(mi).unwrap_or_default();
-                let dur = p.get("duration").and_then(Value::as_i64).map(Tick).unwrap_or_else(|| mo.unwrap_or(full) - sin);
+                let sin = ticks_p(p, "sourceIn", "timeline.place")?;
+                if sin.is_some_and(|t| t < Tick::ZERO) {
+                    return Err(bad("timeline.place", "`sourceIn` must not be negative"));
+                }
+                let sin = sin.or(mi).unwrap_or_default();
+                let dur = ticks_p(p, "duration", "timeline.place")?;
+                // a duration under one frame used to become a one-frame clip (`duration: 5` meant as
+                // seconds is 5 ticks)
+                let frame = s.sequence_rate().frame_duration();
+                if let Some(d) = dur.filter(|d| *d < frame) {
+                    return Err(bad(
+                        "timeline.place",
+                        format!("`duration` {} ticks is shorter than one frame ({} ticks); durations are in ticks, 254016000000 per second", d.0, frame.0),
+                    ));
+                }
+                let dur = dur.unwrap_or_else(|| mo.unwrap_or(full) - sin);
                 let ids = place_item(s, item, TimeRange::new(sin, dur), at, v, a, bool_p(p, "insert").unwrap_or(false), "Place Clip", None)?;
                 Ok(json!({"clips": ids.iter().map(|c| c.0).collect::<Vec<_>>()}))
             }
@@ -2764,7 +2796,7 @@ fn build() -> Vec<CommandSpec> {
                     let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
                     let mt = it.source_time_at(at.unwrap_or_else(|| ph.clamp(it.start, (it.end() - Tick(1)).max(it.start))));
                     let e = match &eff {
-                        Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
+                        Value::Number(n) => effect_index(n).and_then(|i| it.effects.get_mut(i)),
                         Value::String(sid) => it.effects.iter_mut().find(|e| &e.effect == sid),
                         _ => None,
                     }
@@ -2836,7 +2868,7 @@ fn build() -> Vec<CommandSpec> {
                 let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
                 let mt = it.source_time_at(ph.clamp(it.start, (it.end() - Tick(1)).max(it.start)));
                 let e = match &eff {
-                    Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
+                    Value::Number(n) => effect_index(n).and_then(|i| it.effects.get_mut(i)),
                     Value::String(sid) => it.effects.iter_mut().find(|e| &e.effect == sid),
                     _ => None,
                 }
@@ -2883,7 +2915,7 @@ fn build() -> Vec<CommandSpec> {
                 let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
                 let mt = it.source_time_at(ph.clamp(it.start, (it.end() - Tick(1)).max(it.start)));
                 let e = match &eff {
-                    Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
+                    Value::Number(n) => effect_index(n).and_then(|i| it.effects.get_mut(i)),
                     Value::String(sid) => it.effects.iter_mut().find(|e| &e.effect == sid),
                     _ => None,
                 }
@@ -3183,7 +3215,7 @@ fn keyframe_op(s: &mut Session, p: &Value, op: &str) -> Result<Value> {
         let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
         let mt_now = it.source_time_at(ph.clamp(it.start, (it.end() - Tick(1)).max(it.start)));
         let e = match &eff {
-            Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
+            Value::Number(n) => effect_index(n).and_then(|i| it.effects.get_mut(i)),
             Value::String(sid) => it.effects.iter_mut().find(|e| &e.effect == sid),
             _ => None,
         }
