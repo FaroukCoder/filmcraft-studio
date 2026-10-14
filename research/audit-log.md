@@ -1266,3 +1266,25 @@ catch: the media references are bare file names (`camA.mp4`), no paths, so the `
 Resolve will ask to relink. Added to 2.1. (Resolve's own import not tested: no Resolve here.)
 
 **Confidence changes:** none.
+
+## Round 58 — beat_lint on HyperFrames' own compositions (06:17–06:19 UTC)
+
+**Attack:** the house-look bullet said beat_lint was "tested on a synthetic composition only". HyperFrames projects
+split work into `compositions/*.html` files (127 in their repo), hosted by `data-composition-src`, and beat_lint
+ignored those, so a real project would have been linted on its shell alone. Ran it on HyperFrames' own chat example
+(`packages/producer/tests/chat`).
+
+**What it found:** the first run said "0 findings", which read as a pass and wasn't one. The sub-composition computes
+every word's time in a JS loop (`startTime`, `wordStart`, `startTime + words.length * 0.2`), uses `tl.set(...)` for
+its cuts, and ends calls with Prettier's trailing comma (`14.0,\n)`). beat_lint missed all three.
+
+**Fixed (in the prototype):** follows `data-composition-src` on the absolute timeline (depth-capped, cycle-safe,
+missing file reported); reads `.set(` cuts when the second argument is an object literal (so `map.set(k, v)` isn't
+mistaken for one); reads trailing-comma literals; and reports computed or relative positions as
+`unchecked_positions` instead of passing them. On the chat example it now reports 1 literal tween 62 ms off a
+128 BPM beat and 10 positions it cannot check. Tests added for each.
+
+**Report change:** the bullet now states the limit plainly: a static linter can't read times computed in code, so
+have the agent write times as beat counts (`beat(n)`) or check the rendered video.
+
+**Confidence changes:** none (the house-look item was already medium, and this narrows what the prototype claims).

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -33,6 +34,7 @@ class Clip:
     duration: float | None
     beat: str = "beat"  # beat | bar | off (data-beat="off" opts out)
     start: float | None = None
+    src: str | None = None  # data-composition-src: a sub-composition in another file
 
 
 @dataclass
@@ -60,7 +62,8 @@ class _Parser(HTMLParser):
                 dur = float(a["data-duration"]) if a.get("data-duration") not in (None, "") else None
             except ValueError:
                 dur = None
-            self.doc.clips.append(Clip(cid, a["data-start"].strip(), dur, (a.get("data-beat") or "beat").strip()))
+            self.doc.clips.append(Clip(cid, a["data-start"].strip(), dur, (a.get("data-beat") or "beat").strip(),
+                                       src=(a.get("data-composition-src") or "").strip() or None))
 
     def handle_endtag(self, tag):
         if tag == "script":
@@ -107,9 +110,12 @@ def nearest(t: float, period: float, origin: float) -> tuple[float, float]:
 
 
 def gsap_calls(src: str) -> list[str]:
-    """Argument text of every .to( / .from( / .fromTo( call, brackets matched (strings skipped)."""
+    """Argument text of every .to( / .from( / .fromTo( / .set( call, brackets matched (strings skipped).
+
+    A .set( counts only when its second argument is an object literal (`tl.set(el, {opacity: 1}, 2)`),
+    so `map.set(key, value)` is not taken for a cut."""
     out = []
-    for m in re.finditer(r"\.(?:to|from|fromTo)\s*\(", src):
+    for m in re.finditer(r"\.(to|from|fromTo|set)\s*\(", src):
         depth, i, quote = 1, m.end(), None
         while i < len(src) and depth:
             ch = src[i]
@@ -125,13 +131,18 @@ def gsap_calls(src: str) -> list[str]:
             elif ch in ")]}":
                 depth -= 1
             i += 1
-        out.append(src[m.end(): i - 1])
+        body = src[m.end(): i - 1]
+        if m.group(1) == "set":
+            parts = _split_top(body)
+            if len(parts) < 2 or not parts[1].startswith("{"):
+                continue
+        out.append(body)
     return out
 
 
-def _last_arg(args: str) -> float | None:
-    """The timeline position argument (a plain number in seconds), if the call has one."""
-    depth, quote, cut = 0, None, -1
+def _split_top(args: str) -> list[str]:
+    """Top-level comma-separated arguments, stripped."""
+    parts, depth, quote, start = [], 0, None, 0
     for i, ch in enumerate(args):
         if quote:
             if ch == quote:
@@ -143,16 +154,50 @@ def _last_arg(args: str) -> float | None:
         elif ch in ")]}":
             depth -= 1
         elif ch == "," and depth == 0:
-            cut = i
-    last = args[cut + 1:].strip() if cut >= 0 else ""
+            parts.append(args[start:i].strip())
+            start = i + 1
+    parts.append(args[start:].strip())
+    return [a for a in parts if a]
+
+
+def _last_arg(args: str) -> float | None:
+    """The timeline position argument (a plain number in seconds), if the call has one.
+
+    Trailing commas (`14.0,\n)`, which Prettier writes) are allowed."""
+    parts = _split_top(args)
+    last = parts[-1] if len(parts) >= 3 else ""
     return float(last) if re.fullmatch(r"-?\d+(\.\d+)?", last) else None
 
 
-def lint(html: str, bpm: float, downbeat: float = 0.0, fps: float = 30.0) -> list[dict]:
+def lint(html: str, bpm: float, downbeat: float = 0.0, fps: float = 30.0, base_dir: str | None = None,
+         _depth: int = 0, _seen: frozenset = frozenset()) -> list[dict]:
+    """Findings for one composition. With base_dir, sub-compositions (`data-composition-src`,
+    common in HyperFrames projects) are linted too, on the absolute timeline: a sub-file's times
+    are shifted by its host clip's start, and its findings carry `file`."""
     p = _Parser()
     p.feed(html)
     doc = p.doc
     out = [{"code": "unresolved_start", "detail": d} for d in resolve_starts(doc.clips)]
+    if base_dir is not None:
+        for c in doc.clips:
+            if not c.src or c.start is None:
+                continue
+            path = os.path.normpath(os.path.join(base_dir, c.src))
+            if path in _seen or _depth >= 5:
+                out.append({"code": "subcomposition_skipped", "clip": c.id, "file": c.src, "detail": "cycle or nested too deep"})
+                continue
+            try:
+                sub = open(path, encoding="utf-8").read()
+            except OSError:
+                out.append({"code": "missing_subcomposition", "clip": c.id, "file": c.src})
+                continue
+            for f in lint(sub, bpm, downbeat - c.start, fps, os.path.dirname(path), _depth + 1, _seen | {path}):
+                f.setdefault("file", c.src)
+                if "time" in f:  # report absolute composition time
+                    f["time"] = round(f["time"] + c.start, 3)
+                    if "nearest" in f:
+                        f["nearest"] = round(f["nearest"] + c.start, 3)
+                out.append(f)
     beat = 60.0 / bpm
     bar = 4 * beat
     tol = 1.0 / fps + 1e-6
@@ -167,6 +212,7 @@ def lint(html: str, bpm: float, downbeat: float = 0.0, fps: float = 30.0) -> lis
                 out.append({"code": f"off_{c.beat}", "clip": c.id, "edge": what, "time": round(t, 3),
                             "nearest": round(g, 3), "off_ms": round(off * 1000)})
     for i, src in enumerate(doc.scripts):
+        unchecked = []
         for body in gsap_calls(src):
             moves = re.search(r"\b(x|y|xPercent|yPercent)\s*:", body)
             ease = re.search(r"ease\s*:\s*['\"]([^'\"]+)['\"]", body)
@@ -174,6 +220,9 @@ def lint(html: str, bpm: float, downbeat: float = 0.0, fps: float = 30.0) -> lis
                 out.append({"code": "eased_slide", "script": i, "ease": ease.group(1),
                             "detail": "movement with an in-out ease reads as a template slide; cut, or move on a bar line with a linear/out ease"})
             pos = _last_arg(body)
+            last = (_split_top(body) or [""])[-1]
+            if pos is None and len(_split_top(body)) >= 3 and not last.startswith("{"):
+                unchecked.append(last)  # a position computed in code, or relative ("<", "+=0.5")
             if pos is not None:
                 g, off = nearest(pos, beat, downbeat)
                 if abs(off) > tol:
@@ -182,6 +231,11 @@ def lint(html: str, bpm: float, downbeat: float = 0.0, fps: float = 30.0) -> lis
             if re.search(r"\btext\s*:\s*[{'\"`]", body):
                 out.append({"code": "typewriter_text", "script": i,
                             "detail": "typed-out text is one of the tells of AI motion graphics; set the line, or cut word by word on beats"})
+        if unchecked:
+            out.append({"code": "unchecked_positions", "script": i, "count": len(unchecked),
+                        "examples": sorted(set(unchecked))[:3],
+                        "detail": "tween times computed in code or relative to other tweens cannot be checked "
+                                  "statically; snap them in code (e.g. round to 60/bpm) or render and check"})
     return out
 
 
@@ -193,7 +247,8 @@ def main(argv=None) -> int:
     ap.add_argument("--fps", type=float, default=30.0)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    findings = lint(open(args.html, encoding="utf-8").read(), args.bpm, args.downbeat, args.fps)
+    findings = lint(open(args.html, encoding="utf-8").read(), args.bpm, args.downbeat, args.fps,
+                    base_dir=os.path.dirname(os.path.abspath(args.html)))
     if args.json:
         print(json.dumps(findings, indent=2))
     else:

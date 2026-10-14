@@ -9,6 +9,8 @@ while an out-eased move is not; a tween positioned between beats is reported.
 from __future__ import annotations
 
 import sys
+import tempfile
+import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -54,6 +56,37 @@ def main() -> int:
     if sum(1 for c, _ in codes if c == "eased_slide") != 1:
         problems.append("the expo.out move must not count as an in-out slide")
     print(f"{len(findings)} findings: {codes}")
+    # sub-compositions (data-composition-src, how HyperFrames projects are split into files) are
+    # linted on the absolute timeline: a clip 0.25 s into a sub-composition placed at 2 s sits at
+    # 2.25 s, off a 120 BPM beat; one at 0.5 s sits on it; a missing file is reported
+    with tempfile.TemporaryDirectory() as td:
+        os.makedirs(os.path.join(td, "compositions"))
+        main_html = ('<div id="sub" data-start="2" data-duration="4" data-beat="off" data-composition-src="compositions/a.html"></div>'
+                     '<div id="gone" data-start="6" data-duration="2" data-beat="off" data-composition-src="compositions/missing.html"></div>')
+        with open(os.path.join(td, "compositions", "a.html"), "w", encoding="utf-8") as fh:
+            fh.write('<div id="late" data-start="0.25" data-duration="1"></div><div id="ok" data-start="0.5" data-duration="1"></div>')
+        found = beat_lint.lint(main_html, 120.0, base_dir=td)
+        late = [f for f in found if f.get("clip") == "late" and f.get("edge") == "start"]
+        if not late or late[0].get("time") != 2.25 or late[0].get("file") != "compositions/a.html":
+            problems.append(f"sub-composition not linted on the absolute timeline: {found}")
+        if any(f.get("clip") == "ok" for f in found):
+            problems.append(f"on-beat clip in a sub-composition flagged: {found}")
+        if not any(f["code"] == "missing_subcomposition" for f in found):
+            problems.append(f"missing sub-composition not reported: {found}")
+    # positions the linter cannot read must be reported, not silently passed (HyperFrames' own
+    # chat example computes every word's time in a loop): a trailing comma (Prettier) still reads
+    # as a literal, a cut via .set( counts, map.set( does not, and computed times are counted
+    js = ('<script>tl.to("#a", {opacity: 1}, 1.95,);'
+          'tl.set("#b", {opacity: 1}, 2.6); m.set("k", 2.6);'
+          'tl.to("#c", {opacity: 0}, start + i * 0.2); tl.to("#d", {opacity: 0}, "<");'
+          'gsap.to("#e", {opacity: 1});</script>')
+    found = beat_lint.lint(js, 120.0)
+    times = sorted(f["time"] for f in found if f["code"] == "tween_off_beat")
+    if times != [1.95, 2.6]:
+        problems.append(f"trailing-comma literal and .set cut should both be off the beat: {found}")
+    un = [f for f in found if f["code"] == "unchecked_positions"]
+    if not un or un[0]["count"] != 2:
+        problems.append(f"two computed/relative positions should be reported as unchecked: {found}")
     print("FAIL\n  " + "\n  ".join(problems) if problems else "PASS")
     return 1 if problems else 0
 
