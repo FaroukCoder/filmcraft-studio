@@ -691,7 +691,7 @@ starts, an opt-out, an off-beat tween, an in-out slide vs an out-eased move, and
 **Verdict:** stays out of the Top 10 (taste is still low confidence), but it now has a tool and a test that could
 bring it back.
 
-## Round 28 — the shared batch queue the report kept asking for (04:11–04:14 UTC)
+## Round 28 — the shared batch queue the report kept asking for (04:11–04:12 UTC)
 
 **Attack:** Top 10 #2 and Reel Brain both say "checkpoint every batch per item, retry on connection refused, wait
 for the DJ lock", and nothing provided it. Long GPU runs crashing the PC is one of your stated pain points.
