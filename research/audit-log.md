@@ -325,7 +325,7 @@ llama-swap model; ctc-forced-aligner in the sources table; three rows in "Still 
 **Confidence changes:** Top 10 #4 stays medium (speed evidence better, `--fit` on Windows untested).
 Money path 2 gets one more day of work before the first proposal.
 
-## Round 12 — contradictions (03:01–03:09 UTC)
+## Round 12 — contradictions (03:01–03:03 UTC)
 
 **Attack:** read the report against itself: same component, different advice in two places.
 
@@ -354,3 +354,30 @@ Money path 2 gets one more day of work before the first proposal.
 
 **Confidence changes:** Top 10 #3 stays medium; the Ollama-vs-llama-server rerun on Day 3 now settles the server
 question within the first week.
+
+## Round 13 — money: hidden costs and demand evidence (03:03–03:14 UTC)
+
+**Attack:** "what does this cost you in Cairo that the report never priced?" and "is there evidence anyone pays
+for DJ clips, or did I assume it?"
+
+**What broke**
+- **No hidden-cost accounting.** Added a table: ≈ 100 GB of downloads in the first two weeks (against WE home
+  tiers of 140 GB–1 TB/month, aggregator data), ≈ 100 kWh/month if night batches run every night (≈ EGP 170–240 at
+  the post-August-2026 brackets), Upwork Connects ≈ $10–25 for path 2's test, Payoneer's annual fee, paid tools only
+  if they win, and your time.
+- **Round 10's "Creative Studio is not duplicating an existing project" was too strong.** DJ-set clippers exist:
+  markus' `dropspace-dj-clipper` (MIT, 9 stars; energy peaks, centre crop, Shazam every 30 s, Whisper lyric matching)
+  and SendShort's paid DJ-mix tool (audio → waveform clips). Neither uses Serato history, keeps the DJ in frame or
+  cuts on bars, so the differentiation holds, but the sentence now says so precisely.
+- **Money paths missed the most direct sale of Creative Studio's output:** clip packs for DJs abroad. Evidence is
+  thin (one Fiverr DJ-set editor at $50–100 with reviews; beginner short-form rates $25–75 per clip; no dedicated
+  DJ-clip service found), so it enters as path 3 with a one-week test, replacing "your own channel" (folded into
+  path 1 as a portfolio note).
+
+**Still weak:** no Reddit/forum thread where DJs say they'd pay for clips (search returned none). The first test is
+the evidence.
+
+**Kills:** "own clip channel" as a separate money path.
+
+**Confidence changes:** money path 3 enters at low (demand thin); hidden-cost figures medium (aggregator and news
+sources, not bills).
