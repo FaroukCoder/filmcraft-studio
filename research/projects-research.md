@@ -217,6 +217,20 @@ rerun ten prompts from your direction folder. Then message one collective with t
 - **Multicam in FilmCraft:** upstream already has `clip.createMulticam` and `multicam.cutToCamera`; drive those from the plan instead of building cuts by hand.
 - **Talking-head / podcast path:** [FunClip](https://github.com/modelscope/FunClip) (MIT, 6.4k stars) for transcript-driven clipping; for active-speaker multicam, [Cutcast](https://github.com/BoazCohenJ/Cutcast) (MIT, Windows, syncs cameras by audio and cuts to whoever talks) and [podcast-editor](https://github.com/vamshicreates/podcast-editor) (MIT) show the method (per-mic RMS dominance, cross-correlation sync), but both have 0–1 stars: read them, don't depend on them. Your existing cross-correlation sync already covers half of it.
 
+**The open-source auto-editing landscape (what exists, and what to take from it)**
+
+| Project | Stars | Licence | What it does | Take |
+|---|---|---|---|---|
+| [OpenMontage](https://github.com/calesthio/OpenMontage) | 68.0k | AGPL-3.0 | Agentic production system, 12 pipelines, a `music-to-video` skill on a beat grid | Ideas only (AGPL); its skill files are worth reading |
+| [HyperFrames](https://github.com/heygen-com/hyperframes) | 62.9k | Apache-2.0 | HTML → video for agents; `/music-to-video`, `/embedded-captions` | The renderer, not the catalog |
+| [FunClip](https://github.com/modelscope/FunClip) | 6.4k | MIT | Transcript-driven clipping with LLM picks | Podcast path |
+| [auto-editor](https://github.com/WyattBlue/auto-editor) | 5.5k | Unlicense | Cuts silence/dead air by loudness or motion | Talking-head cleanup |
+| [podcli](https://github.com/nmbrthirteen/podcli) | 79 | AGPL-3.0 (+ commercial) | Podcast clipper: face tracking, captions, MCP server, multicam | Ideas only |
+| [beat-synced-edit](https://github.com/ZiadAbdelkarim/beat-synced-edit) | 13 | MIT | librosa beats + energy peaks matched to scored scenes, anti-repetition | Readable reference for energy-matched cutting |
+| Cutcast / podcast-editor | 1 / 0 | MIT | Active-speaker multicam (per-mic RMS, cross-correlation sync) | Reference only |
+
+Nothing I found edits DJ-set footage from Serato data, so Creative Studio is not duplicating an existing project.
+
 **Shot picking from two synced angles (proposal)**
 1. Per shot window (aligned to bars): sharpness (Laplacian variance), exposure, motion energy, face/pose visibility, hands-up count (wrists above head from pose), strobe flashes.
 2. Hard rules from the measured benchmark (Top 10 #5): minimum shot length in bars, change angle only on bar or phrase lines, crowd angle at the drop plus ~1 bar (crowd reaction lags the drop).
@@ -313,6 +327,8 @@ rerun ten prompts from your direction folder. Then message one collective with t
 - **Confidence: medium.**
 - **First step:** the 50-item blind re-label.
 
+**How others build "save → second brain"**: Dopamine (above, Gemini, MIT); a ColdIQ guide (hourly Mac job → enriched Obsidian notes, behind an email gate, uses Apify + instagrapi); [Karakeep](https://github.com/karakeep-app/karakeep) (AGPL-3.0, self-hosted bookmark manager with AI tagging through Ollama, good as a capture inbox); your own claude-obsidian / LLM-wiki vault. None does per-project ranking against your own project list as well as Dopamine's mapper, and none runs fully local on a 12 GB card; yours is already ahead on that axis.
+
 **Drop or avoid**
 - instagrapi for collecting saves (Dopamine uses it; it logs into your account through a private API and risks a ban). Use Instagram's own "Download your information" export (JSON) for the list of saved items, then fetch only what you need.
 
@@ -329,6 +345,17 @@ rerun ten prompts from your direction folder. Then message one collective with t
 What you already have (from the repo): shazamio + AudD, your own landmark fingerprinter with a query-side speed ladder, comb-filter tempo (0.01 BPM MAE vs Serato on 17 tracks), a key ensemble, a read-only Serato parser, a hand-written WebGL2 engine. Not on `main`: Serato write-back, Soulseek.
 
 **Adopt**
+- **Beat/downbeat trackers for electronic music, with the numbers that exist:**
+
+| Tracker | Licence | Evidence on electronic music | Verdict |
+|---|---|---|---|
+| Your comb-filter tempo (`analyze.py`) | yours | 0.01 BPM mean error vs Serato on 17 tracks, 15/17 exact | Keep for tempo |
+| [Beat This](https://github.com/CPJKU/beat_this) | MIT (code + weights) | Giant Steps (664 Beatport tracks): 89.3 % strict / 95.0 % octave-tolerant tempo; small-model ensemble 90.9 / 96.4 % | Use for beat and downbeat positions |
+| madmom | BSD code, CC BY-NC-SA models | Raveform (TISMIR 2026): competitive on EDM beats, "lags significantly" on downbeats (not trained on EDM) | Avoid (licence + downbeats) |
+| All-In-One | MIT | Uses madmom-style DBN; last commit 2023-10-10; NATTEN build on Windows | Avoid |
+| librosa `beat_track` | ISC | Tempo snaps to its frame grid (your own notes: 6 BPM steps near 125; my test: 150 read as 152) | Fallback only, with regression on beat times |
+| Raveform models | MIT repo (empty) | Trained on 1,423 EDM tracks with metrical + functional (section) annotations, per the paper | Watch: GitHub repo was only a licence file on 2026-10-14 |
+
 - rb2serato encoders for grids and cues (Top 10 #10). [serato-tools](https://pypi.org/project/serato-tools/) (Python ≥3.12) is an alternative; **pyserato is AGPL-3.0**, avoid if you ever distribute.
 - **Rekordbox:** [pyrekordbox](https://github.com/dylanljones/pyrekordbox) (MIT, active): its XML writer has `Track.add_tempo(Inizio, Bpm, Metro, Battito)`, one `TEMPO` element per grid section, which is how Rekordbox XML carries tempo changes; it also reads Rekordbox's own ANLZ beat grids.
 - **Cue points and phrases:** [CUE-DETR](https://github.com/ETH-DISCO/cue-detr) (MIT code, 2024) detects DJ cue points as objects on a spectrogram and ships the EDM-CUE dataset (4,710 tracks, ~21k cues placed by professional DJs). Its authors found most training tracks use **16-bar phrases, then 8-bar**, so don't hard-code 32. Check the checkpoint/dataset licence before shipping anything built on them.

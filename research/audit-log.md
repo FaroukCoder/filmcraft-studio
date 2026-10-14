@@ -235,7 +235,7 @@ for licence expressions; re-searched any number I could not trace.
 **Still unverifiable from here:** Hugging Face model cards (Qwen-Image 2.1, MiniMax H3, GLM-4.6V-Flash, MiniCPM-V
 4.5), arXiv full texts, dev.to. Claims that depend on them are marked in the "Still uncertain" table.
 
-## Round 9 — deep dive, prototypes, first-week plan, steelman (02:33–03:02 UTC)
+## Round 9 — deep dive, prototypes, first-week plan, steelman (02:33–02:48 UTC)
 
 **Built and tested six prototypes** in `research/prototypes/` (synthetic tests, all pass):
 reference-clip analyser, VLM JSON guard, Serato set grid (history + alignment), L1 reframing path, DJ guard, Laya
@@ -266,3 +266,22 @@ for the Reel Brain backlog is a conditional test. A tldraw canvas app stays reje
 layout from the ComfyUI tutorial (gated download, accept BFL licence); GLM-4.6V-Flash is listed by LM Studio with
 vision and tools; Laya's training rows are `{state, questions, gold}`.
 
+
+## Round 10 — coverage check against the brief (02:48–02:55 UTC)
+
+**Attack:** re-read the brief line by line and asked "which research bullet did the report skip?"
+
+**Gaps found and filled**
+- Creative Studio had no view of **what already exists** in open-source auto-editing. Added a landscape table
+  (OpenMontage, HyperFrames, FunClip, auto-editor, podcli, beat-synced-edit, Cutcast/podcast-editor) with stars and
+  licences. Finding: nothing edits DJ-set footage from Serato data, so Creative Studio is not duplicating a project.
+- whatstheID's beat-tracker advice was scattered. Added one comparison table with the only numbers that exist for
+  electronic music (your comb filter, Beat This on Giant Steps, madmom's downbeat weakness on EDM per Raveform,
+  All-In-One, librosa's quantisation).
+- Reel Brain lacked "how do others build save → second brain". Added a paragraph (Dopamine, a ColdIQ guide,
+  Karakeep, your own vault pattern).
+
+**Kills:** none. **New watch item:** Raveform's GitHub repo held only a licence file on 2026-10-14; the paper's
+models are not usable yet.
+
+**Confidence changes:** none.
