@@ -5,7 +5,7 @@ Three gaps between "whatstheID knows the BPM" and "Serato shows the right grid":
 1. **The anchor.** A Serato grid is a BPM *and* a position for a beat. whatstheID's
    `_comb_tempo` already slides a comb over every phase to find the tempo, keeps the best
    score and throws the phase away. `grid_anchor()` runs that comb at the known BPM, then
-   finds where each kick actually starts and fits one straight line through all of them,
+   finds where each kick's transient starts and fits one straight line through all of them,
    which also corrects the BPM (0.01 BPM off is ~27 ms of drift by the end of a six-minute
    track). It refuses (`ok: false`) when the kicks don't sit on one line. Check it against
    Serato's own grids on your reference tracks (`compare` below) before trusting it.
@@ -89,11 +89,13 @@ def comb_phase(onset_env, frame_rate: float, bpm: float, phases: int = 400) -> t
 
 
 def attack_times(y, sr: int, predicted, before: float = 0.06, after: float = 0.045,
-                 frac: float = 0.5, cutoff: float = 150.0):
+                 frac: float = 0.2, cutoff: float = 1000.0):
     """Where each kick actually starts: in a window around each predicted beat, the first
     sample where the zero-phase low-passed envelope reaches `frac` of its rise. Onset
     envelopes peak 18-31 ms after the attack (measured on synthetic kicks, constant with
-    tempo); this doesn't. Returns (beat_index, time) pairs for windows that had a kick."""
+    tempo); this doesn't. The 1 kHz cutoff keeps the kick's click: a real kick's sub body
+    swells for ~20 ms, so a 150 Hz / 50 % rule landed 23 ms late on a recorded loop, while
+    1 kHz / 20 % landed 0.9 ms from the transient. Returns (beat_index, time) pairs."""
     import numpy as np
     from scipy.signal import butter, sosfiltfilt
 
@@ -116,6 +118,24 @@ def attack_times(y, sr: int, predicted, before: float = 0.06, after: float = 0.0
     return out
 
 
+def _drift_ms(ks, ts, a: float, P: float, block: int = 16) -> float:
+    """Largest |median residual| over blocks of `block` beats, using EVERY detected kick.
+    Outlier rejection alone hides a tempo ramp (it drops the beats that disagree and the
+    rest fit beautifully: measured, 0.58 ms rms on a +1 BPM/min ramp), so this checks the
+    whole track against the line. The search windows cap it near 30 ms, so read anything
+    above the limit as "not one tempo", not as a measurement."""
+    import numpy as np
+
+    k, t = np.asarray(ks, float), np.asarray(ts, float)
+    res = t - (a + k * P)
+    worst = 0.0
+    for b0 in range(0, int(k.max()) + 1, block):
+        sel = (k >= b0) & (k < b0 + block)
+        if sel.sum() >= block // 2:
+            worst = max(worst, abs(float(np.median(res[sel]))))
+    return worst * 1000
+
+
 def _robust_line(ks, ts):
     """Least-squares t = a + k*P with two rounds of MAD outlier rejection."""
     import numpy as np
@@ -134,17 +154,19 @@ def _robust_line(ks, ts):
 
 
 def grid_anchor(y, sr: int, bpm: float, beat_one: int | None = None, hop: int = 512,
-                max_rms_ms: float = 4.0) -> dict:
+                max_rms_ms: float = 4.0, max_drift_ms: float = 5.0, min_kept: float = 0.85) -> dict:
     """A constant-tempo Serato grid for the whole track: anchor time and BPM.
 
     1. comb phase at the analysed BPM (coarse: lands ~31 ms late at hop 512);
-    2. the attack of every kick near that comb, then a straight-line fit of attack time
+    2. the transient of every kick near that comb, then a straight-line fit of its time
        against beat number over the whole track. The fit corrects the BPM too: a 0.01 BPM
        error is ~27 ms of drift by the end of a six-minute track, which Serato shows.
     3. `beat_one` (0-3, from `downbeat_phase.py` for beats counted from this anchor) moves
        the anchor to a downbeat; the anchor is folded back to the first one at or after 0 s.
-    `ok` is False when the fit is ragged (rms > max_rms_ms: live drums, a vinyl rip, tempo
-    changes): write nothing then, because a precise-looking wrong grid is worse than none."""
+    `ok` is False when one straight line doesn't explain the kicks: ragged (rms > max_rms_ms),
+    drifting (a 16-beat stretch off the line by > max_drift_ms: a vinyl rip, live drums,
+    tempo changes) or mostly rejected (< min_kept of the kicks found). Write nothing then,
+    because a precise-looking wrong grid is worse than none."""
     import librosa
     import numpy as np
 
@@ -163,12 +185,16 @@ def grid_anchor(y, sr: int, bpm: float, beat_one: int | None = None, hop: int = 
     hits = attack_times(y, sr, predicted, before=0.03, after=0.03)
     if len(hits) >= 16:
         a, P, rms, used = _robust_line([h[0] for h in hits], [h[1] for h in hits])
+    drift = _drift_ms([h[0] for h in hits], [h[1] for h in hits], a, P)
+    kept = used / max(1, len(hits))
     t = a + (int(beat_one) % 4) * P if beat_one is not None else a
     step = 4 * P if beat_one is not None else P
     t = t - math.floor(t / step) * step
-    return {"ok": rms * 1000 <= max_rms_ms, "anchor_s": round(t, 5), "bpm": round(60.0 / P, 4),
-            "bpm_in": bpm, "fit_rms_ms": round(rms * 1000, 2), "beats_used": used,
-            "comb_score": round(score, 3), "downbeat": beat_one is not None}
+    ok = rms * 1000 <= max_rms_ms and drift <= max_drift_ms and kept >= min_kept
+    return {"ok": ok, "anchor_s": round(t, 5), "bpm": round(60.0 / P, 4),
+            "bpm_in": bpm, "fit_rms_ms": round(rms * 1000, 2), "drift_ms": round(drift, 2),
+            "beats_used": used, "kicks_found": len(hits), "comb_score": round(score, 3),
+            "downbeat": beat_one is not None}
 
 
 # --------------------------------------------------------------------------- 2. payloads

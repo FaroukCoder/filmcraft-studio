@@ -2,8 +2,8 @@
 
 Anchor (always runs): a synthetic techno track at 132.004 BPM with rolling 16th-note bass
 under the kicks, hats and claps, first beat at 0.211 s, analysed with a BPM of 132.0 (0.004
-off, about whatstheID's error); the grid must land within 2 ms at the start and 3 ms at
-the end, and the BPM within 0.002. A track whose tempo drifts (a vinyl rip, live drums)
+off, about whatstheID's error); kicks have a click and a slowly swelling sub body, like a
+recorded one. The grid must land within 3 ms of the click at both ends, the BPM within 0.002. A track whose tempo drifts (a vinyl rip, live drums)
 must be refused, not gridded.
 
 Write (needs ffmpeg, mutagen and RB2SERATO_TAGS = path to rb2serato's seratotags.py): grid + 3 cues
@@ -39,7 +39,14 @@ def synth(bpm: float, t0: float, dur: float, seed: int = 1, drift: float = 0.0) 
     n = int(dur * SR)
     y = rng.normal(0, 0.03, n)
     t = np.arange(int(0.25 * SR)) / SR
-    kick = np.sin(2 * np.pi * (50 + 120 * np.exp(-t * 30)) * t) * np.exp(-t * 9)
+    # a real kick: a 2 ms click, then a sub body that swells over ~15 ms (a recorded loop
+    # showed the body peaking ~20 ms after the transient; a detector tuned on an instant
+    # sine landed 23 ms late on it). The beat is the click.
+    click = np.zeros_like(t)
+    nc = int(0.002 * SR)
+    click[:nc] = rng.normal(0, 1, nc) * 0.6
+    body = np.sin(2 * np.pi * (50 + 120 * np.exp(-t * 30)) * t) * np.minimum(1, t / 0.015) * np.exp(-t * 9)
+    kick = click + body
     hat = rng.normal(0, 1, int(0.04 * SR)) * np.exp(-np.arange(int(0.04 * SR)) / SR * 90) * 0.25
     clap = rng.normal(0, 1, int(0.12 * SR)) * np.exp(-np.arange(int(0.12 * SR)) / SR * 25) * 0.5
     tb, i = t0, 0
@@ -49,7 +56,9 @@ def synth(bpm: float, t0: float, dur: float, seed: int = 1, drift: float = 0.0) 
         y[s:s + kick.size] += kick
         for q in (1, 2, 3):  # rolling bass on the 16ths after the kick (ducked under it)
             sb = int(round((tb + q * beat / 4) * SR))
-            nb = int(beat / 4 * SR * 0.8)
+            nb = min(int(beat / 4 * SR * 0.8), n - sb)
+            if nb <= 0:
+                continue
             tt = np.arange(nb) / SR
             y[sb:sb + nb] += 0.45 * np.sin(2 * np.pi * 55 * tt) * np.minimum(1, tt * 200) * np.exp(-tt * 12)
         sh = int(round((tb + beat / 2) * SR))
@@ -69,7 +78,9 @@ def anchor_checks(problems: list) -> dict:
     k_end = int((dur - 1 - t0) / Pt)
     start_err = (r.get("anchor_s", 0) - t0) * 1000
     end_err = (r.get("anchor_s", 0) + k_end * P - (t0 + k_end * Pt)) * 1000
-    if not r.get("ok") or abs(start_err) > 2 or abs(end_err) > 3 or abs(r["bpm"] - true_bpm) > 0.002:
+    # the detector marks 20 % of the rise, a fixed ~2 ms after the click starts; `compare`
+    # against Serato's own grids calibrates whatever constant remains
+    if not r.get("ok") or abs(start_err) > 3 or abs(end_err) > 3 or abs(r["bpm"] - true_bpm) > 0.002:
         problems.append(f"steady track: {r}, start {start_err:+.2f} ms, end {end_err:+.2f} ms")
     rd = sw.grid_anchor(synth(130.0, t0, dur, seed=2, drift=1.0), SR, 131.5)  # +1 BPM per minute
     if rd.get("ok"):

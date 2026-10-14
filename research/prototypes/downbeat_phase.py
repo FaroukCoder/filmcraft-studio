@@ -6,8 +6,9 @@ kick, so the kick says nothing about where the bar starts. Two cues usually do:
 - changes: new parts, crashes and breakdown edges land on the first beat of a bar, most
   strongly at 8- and 16-bar phrase starts.
 This scores the four possible phases on both cues and returns the downbeats, the phase, a
-confidence (margin between the best and second-best phase) and phrase starts (8-bar
-boundaries counted from the strongest change). Feed it beats from your comb-filter grid,
+confidence (margin between the best and second-best phase) and phrase starts (8-bar steps
+from the track's first bar, with bar novelty as a second opinion that is flagged when it
+disagrees). Feed it beats from your comb-filter grid,
 Beat This, or Serato's grid.
 
     python downbeat_phase.py track.wav --beats beats.txt
@@ -85,21 +86,41 @@ def choose_phase(clap: np.ndarray, beat_mel: np.ndarray, w_clap: float = 1.0, w_
             "change_rel": [round(float(x), 3) for x in change_rel]}
 
 
-def phrases(beat_mel: np.ndarray, phase: int, bars_per_phrase: int = 8) -> list[int]:
-    """Beat indices of phrase starts: 8-bar steps anchored at the bar with the biggest change."""
-    nov = bar_novelty(beat_mel, phase)
-    if len(nov) == 0:
-        return []
-    anchor = phase + 4 * (int(np.argmax(nov)) + 1)  # the bar that starts after the biggest jump
-    step = 4 * bars_per_phrase  # a multiple of 4, so every phrase start is also a bar's beat one
-    return list(range(anchor % step, len(beat_mel), step))
+def phrases(beats: np.ndarray, beat_mel: np.ndarray, phase: int, bars_per_phrase: int = 8) -> dict:
+    """Phrase starts in 8-bar steps from the bar that contains the first beat, which is how
+    produced tracks are built (phrase 1 starts on bar 1), extrapolating back when the beat
+    list starts mid-bar. Bar novelty is a second opinion, not the anchor: a crash on a
+    phrase's first bar and a fill on its last both make ONE bar stand out, so "the bar
+    after the biggest jump" can be a bar late (it was, on a recorded loop). The vote
+    reports the 8-bar offset where the jumps land and flags when it disagrees."""
+    if len(beats) < 2:
+        return {"starts": [], "novelty_offset_bars": None, "novelty_disagrees": False}
+    period = float(np.median(np.diff(beats)))
+    first_bar = float(beats[0]) + (phase - 4 if phase else 0) * period  # bar holding beat 0
+    bar = 4 * period
+    step = bars_per_phrase * bar
+    starts = [round(first_bar + k * step, 3) for k in range(int((beats[-1] - first_bar) // step) + 1)
+              if first_bar + k * step >= beats[0] - 1e-6 or k == 0]
+    nov = bar_novelty(beat_mel, phase)  # nov[i]: change into the bar starting at beat phase+4(i+1)
+    votes = [[] for _ in range(bars_per_phrase)]
+    first_bar_idx = 0 if phase == 0 else 1  # bars counted from first_bar
+    for i, v in enumerate(nov):
+        votes[(first_bar_idx + i + 1) % bars_per_phrase].append(float(v))
+    mean = [float(np.mean(v)) if v else 0.0 for v in votes]
+    best = int(np.argmax(mean))
+    return {"starts": [s for s in starts if s >= -1e-6],
+            "novelty_offset_bars": best,
+            "novelty_disagrees": bool(best != 0 and mean[best] > 1.5 * max(mean[0], 1e-9))}
 
 
 def analyse(y: np.ndarray, sr: int, beats: np.ndarray) -> dict:
     clap, beat_mel = beat_features(y, sr, beats)
     res = choose_phase(clap, beat_mel)
     res["downbeats"] = [round(float(t), 3) for t in beats[res["phase"]::4]]
-    res["phrase_starts"] = [round(float(beats[i]), 3) for i in phrases(beat_mel, res["phase"])]
+    ph = phrases(beats, beat_mel, res["phase"])
+    res["phrase_starts"] = ph["starts"]
+    res["phrase_novelty_offset_bars"] = ph["novelty_offset_bars"]
+    res["phrase_novelty_disagrees"] = ph["novelty_disagrees"]
     return res
 
 

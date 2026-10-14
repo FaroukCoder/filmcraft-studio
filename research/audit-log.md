@@ -895,3 +895,34 @@ it), the README now says so plainly, and the report says the script belongs in w
 
 **Confidence changes:** #10 stays medium (nothing has been loaded by Serato), but its premise is corrected and its
 first step now covers FLAC, a known track, and the MP3 offset. Three new rows in "Still uncertain".
+
+## Round 39 — the grid and phrase code meets a real kick (04:53–05:03 UTC)
+
+**Attack:** rounds 30 and 38 validated `downbeat_phase.py` and `serato_writeback.py` on synthetic audio only. Found
+real electronic audio this container can reach: Essentia's test-audio repo on GitHub (`recorded/techno_loop.wav`
+and `.mp3`, a 30.72 s, 125 BPM, 16-bar recorded loop). Its licence is not stated, so it was used for measurement only
+and is not committed.
+
+**What broke**
+- **The kick detector was tuned on sine sweeps and was 23 ms late on a real kick.** A recorded kick's sub body swells
+  for ~20 ms after its click, so "150 Hz low-pass, 50 % of the rise" fired late. Swept cutoff × threshold against the
+  measured transient start (3.2 ms into the loop): 1 kHz / 20 % lands 0.9 ms after it with 0.6 ms rms. New defaults;
+  the test's synthetic kick now has a click and a swelling body, so it would have caught this.
+- **Outlier rejection hid a tempo ramp.** After the retune, a +1 BPM/min drifting track passed (0.58 ms rms on the
+  299 of 392 beats the fit kept). Added a drift check over *all* detected kicks (median residual per 16-beat block)
+  and a minimum kept share; now even 0.05 BPM/min over five minutes is refused. The drift number saturates near the
+  search window (~30 ms), so it is a refusal signal, not a measurement; documented.
+- **Phrase anchoring was a bar late on the real loop.** "The bar after the biggest change" picked bar 2: the loop's
+  first bar is distinct on both sides (looping it twice shows big jumps into and out of it), and a crash on a phrase's
+  first bar and a fill on its last are indistinguishable by bar novelty. Phrases now count 8-bar steps from the
+  track's first bar (extrapolated back when the beat list starts mid-bar), with novelty as a second opinion that is
+  flagged when it disagrees. Real loop: phrases at 0 and 15.36 s, disagreement flagged; synthetic test now also
+  asserts that novelty agrees when sections change on phrase lines.
+- A test-helper bug: the synthetic bass overran the buffer near the end for some lengths. Fixed.
+
+**Confirmed:** on the real loop the fit gives 124.9997 BPM and librosa's `beat_track` gives 123.05, the exact
+lag-grid value (2583.98/21) your own CLAUDE.md diagnosed. WAV and MP3 of the same loop give identical anchors with
+both librosa and ffmpeg decoding, so our decoders agree; the ~26 ms Serato offset can only be measured in Serato.
+`downbeat_phase` found phase 0 with a clear backbeat. All 17 prototype tests pass, including the real llama-swap one.
+
+**Confidence changes:** none in the Top 10; #10's anchor now rests on one real recording instead of none.

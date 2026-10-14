@@ -3,7 +3,8 @@ off-beat hats, an 8-bar breakdown (bars 16-23, no kick), the drop on bar 24 with
 bars 24, 32 and 40. The beat list starts on beat 3 of a bar, so the right phase is 2. Three
 versions: claps + structure, structure only (no claps, as in much hardgroove), claps only
 (no breakdown or crashes), which can only narrow it to beats 1/3 and must report that ambiguity.
-Phrase starts must include the breakdown (bar 16) and the drop (24).
+Phrase starts are counted in 8-bar steps from the first bar (bar 0, even though the beat list
+starts mid-bar), and bar novelty (breakdown at 16, drop at 24) must agree with them.
 
     python test_downbeat_phase.py
 """
@@ -69,8 +70,10 @@ def main() -> int:
             problems.append(f"{tag}: claps alone can only narrow it to beat 1 or 3; must say so: {res}")
         if structure:
             starts = {round((t - 0.1) / (4 * BEAT)) for t in res["phrase_starts"]}
-            if not {16, 24} <= starts:
-                problems.append(f"{tag}: phrase starts at bars {sorted(starts)}, want 16 and 24 among them")
+            if not {0, 8, 16, 24, 32, 40} <= starts:
+                problems.append(f"{tag}: phrase starts at bars {sorted(starts)}, want every 8th bar from 0")
+            if res["phrase_novelty_offset_bars"] != 0 or res["phrase_novelty_disagrees"]:
+                problems.append(f"{tag}: the breakdown and drop sit on phrase lines, novelty should agree: {res}")
     print("FAIL\n  " + "\n  ".join(problems) if problems else "PASS")
     return 1 if problems else 0
 
