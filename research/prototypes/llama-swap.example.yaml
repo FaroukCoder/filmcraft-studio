@@ -1,0 +1,76 @@
+# llama-swap config for one 12 GB GPU shared by Hermes, Reel Brain, Creative Studio and
+# ComfyUI (Top 10 #6). Only one member of the "gpu" group runs at a time; asking for
+# another unloads the current one first.
+#
+# Install (community-maintained WinGet package):  winget install llama-swap
+# Run:   llama-swap --config llama-swap.yaml --listen 127.0.0.1:8080
+# Then point every client at http://127.0.0.1:8080/v1 with the model id below,
+# and open ComfyUI at http://127.0.0.1:8080/comfyui/ (reserved id `comfyui_auto`).
+#
+# Paths, file names and flags are placeholders: check `llama-server --help` for your
+# build (older builds spell flash attention `-fa`). Not tested on Windows by me;
+# keys follow llama-swap's own config.example.yaml (October 2026).
+
+macros:
+  "llama": >-
+    C:/ai/llama.cpp/llama-server.exe
+    --host 127.0.0.1 --port ${PORT}
+    -ngl 999 --jinja
+
+models:
+  # Hermes daily driver (needs ~32 GB system RAM for the offloaded experts).
+  # Start --n-cpu-moe around 22 and lower it until VRAM is nearly full at your context.
+  "agent":
+    cmd: |
+      ${llama}
+      -m C:/ai/models/Qwen3.6-35B-A3B-Q4_K_M.gguf
+      --n-cpu-moe 22
+      -c 65536
+      --chat-template-file C:/ai/templates/qwen3.6.jinja
+    ttl: 900
+
+  # Fallback daily driver if RAM is 16 GB: dense, fully on the GPU.
+  "agent-small":
+    cmd: |
+      ${llama}
+      -m C:/ai/models/Qwen3.5-9B-Q5_K_M.gguf
+      -c 65536
+    ttl: 900
+
+  # Vision for Reel Brain and Creative Studio defect checks. Q8 loops less than Q4.
+  "vlm":
+    cmd: |
+      ${llama}
+      -m C:/ai/models/Qwen3-VL-8B-Instruct-Q8_0.gguf
+      --mmproj C:/ai/models/mmproj-Qwen3-VL-8B-Instruct-F16.gguf
+      -c 16384
+    ttl: 300
+
+  # A/B candidate: one benchmark author saw zero loops in 500 cases.
+  "vlm-glm":
+    cmd: |
+      ${llama}
+      -m C:/ai/models/GLM-4.6V-Flash-Q8_0.gguf
+      --mmproj C:/ai/models/mmproj-GLM-4.6V-Flash-F16.gguf
+      -c 16384
+    ttl: 300
+
+  # ComfyUI behind llama-swap: the id must be exactly comfyui_auto.
+  "comfyui_auto":
+    cmd: >-
+      C:/ai/ComfyUI_windows_portable/python_embeded/python.exe -s
+      C:/ai/ComfyUI_windows_portable/ComfyUI/main.py
+      --listen 127.0.0.1 --port ${PORT}
+    checkEndpoint: /
+    ttl: 600
+    unlisted: true
+
+routing:
+  router:
+    use: group
+    settings:
+      groups:
+        "gpu":
+          swap: true        # one member at a time
+          exclusive: true   # loading a member unloads other groups too
+          members: ["agent", "agent-small", "vlm", "vlm-glm", "comfyui_auto"]

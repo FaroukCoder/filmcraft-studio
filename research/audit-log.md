@@ -205,7 +205,7 @@ race to the bottom; Egyptian-dialect captions are the differentiator. Agent-setu
 **Unverified:** Upwork Direct-to-Local-Bank in EGP for 2026; current InstaPay caps; Instagram creator monetisation in
 Egypt; any real price a Cairo collective has paid for clips (no source exists; the first test produces it).
 
-## Round 8 — link and claim check (02:27–02:36 UTC)
+## Round 8 — link and claim check (02:26–02:32 UTC)
 
 **Method:** extracted every URL from the report; opened GitHub pages for stars and issue states (WebFetch works for
 github.com, not for most other hosts); shallow-cloned repos for last-commit dates and licence files; read PyPI JSON

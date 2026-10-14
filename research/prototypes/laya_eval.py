@@ -1,0 +1,120 @@
+"""Is Laya earning its place in front of every message? (Top 10 #2)
+
+Reads your logged routing decisions with a correct label added by hand (or by a
+stronger teacher model), one JSON object per line:
+
+    {"text": "...", "laya": "coding", "confidence": 0.91, "label": "coding"}
+
+and reports: accuracy overall and per route, what gets confused with what, how well
+the confidence is calibrated (ECE), the accuracy you would get by only trusting
+Laya above a confidence threshold (and how many messages that leaves to the LLM),
+and a cheap baseline trained on the same labels (TF-IDF + logistic regression by
+default; `--embed google/embeddinggemma-300m` uses sentence-transformers if installed).
+
+    python laya_eval.py routes.jsonl
+    python laya_eval.py routes.jsonl --embed google/embeddinggemma-300m
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections import Counter, defaultdict
+
+import numpy as np
+
+
+def load(path: str) -> list[dict]:
+    rows = []
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if line:
+            r = json.loads(line)
+            if r.get("label") is not None:
+                rows.append(r)
+    return rows
+
+
+def ece(conf: np.ndarray, correct: np.ndarray, bins: int = 10) -> float:
+    edges = np.linspace(0, 1, bins + 1)
+    total = 0.0
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = (conf > lo) & (conf <= hi)
+        if m.any():
+            total += m.mean() * abs(correct[m].mean() - conf[m].mean())
+    return float(total)
+
+
+def baseline_accuracy(texts: list[str], labels: list[str], embed: str | None, folds: int = 5) -> float | None:
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+    counts = Counter(labels)
+    if len(counts) < 2 or min(counts.values()) < folds:
+        return None
+    if embed:
+        from sentence_transformers import SentenceTransformer  # type: ignore
+
+        X = SentenceTransformer(embed).encode(texts, normalize_embeddings=True)
+        clf = LogisticRegression(max_iter=2000)
+    else:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.pipeline import make_pipeline
+
+        X = texts
+        # char n-grams cope with Arabic, English and code-switching without a tokenizer
+        clf = make_pipeline(TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4), min_df=2),
+                            LogisticRegression(max_iter=2000))
+    cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=0)
+    return float(np.mean(cross_val_score(clf, X, labels, cv=cv)))
+
+
+def report(rows: list[dict], embed: str | None = None) -> dict:
+    y = [r["label"] for r in rows]
+    p = [r["laya"] for r in rows]
+    conf = np.array([float(r.get("confidence", np.nan)) for r in rows])
+    correct = np.array([a == b for a, b in zip(y, p)], dtype=float)
+    per_route = {}
+    for lab in sorted(set(y)):
+        m = np.array([v == lab for v in y])
+        per_route[lab] = {"n": int(m.sum()), "accuracy": round(float(correct[m].mean()), 3)}
+    confusions = Counter((a, b) for a, b in zip(y, p) if a != b).most_common(8)
+    out = {
+        "n": len(rows),
+        "accuracy": round(float(correct.mean()), 3),
+        "majority_class_baseline": round(Counter(y).most_common(1)[0][1] / len(y), 3),
+        "per_route": per_route,
+        "top_confusions": [f"{a} -> {b}: {c}" for (a, b), c in confusions],
+    }
+    if not np.isnan(conf).all():
+        ok = ~np.isnan(conf)
+        out["ece"] = round(ece(conf[ok], correct[ok]), 3)
+        out["mean_confidence"] = round(float(conf[ok].mean()), 3)
+        gate = []
+        for t in (0.5, 0.6, 0.7, 0.8, 0.9):
+            m = ok & (conf >= t)
+            if m.any():
+                gate.append({"threshold": t, "kept_pct": round(100 * m.mean(), 1),
+                             "accuracy_when_kept": round(float(correct[m].mean()), 3)})
+        out["confidence_gate"] = gate
+    base = baseline_accuracy([r["text"] for r in rows], y, embed)
+    if base is not None:
+        out["baseline_cv_accuracy"] = round(base, 3)
+    return out
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("jsonl")
+    ap.add_argument("--embed", help="sentence-transformers model id for the baseline")
+    args = ap.parse_args(argv)
+    rows = load(args.jsonl)
+    if not rows:
+        print("no labelled rows", file=sys.stderr)
+        return 1
+    print(json.dumps(report(rows, args.embed), indent=2, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
