@@ -143,3 +143,22 @@ a custom licence (registration for commercial use): fine for personal use.
 **Unverified:** the exact file name of saved posts in Instagram's JSON export (no source found; inspect the ZIP).
 JSON Canvas spec confirmed by reading it (file/text/link/group nodes).
 
+## Round 5 — whatstheID audit (02:21–02:27 UTC)
+
+**Attacked:** rb2serato on Windows, Rekordbox dynamic grids, phrase/cue detection, stretch-robust fingerprinting,
+whether sharing the tool makes sense, competitors.
+
+**Verified in source code**
+- rb2serato's encoders (`seratotags.py`) are pure Python and support multi-marker grids; only the file-swap and path
+  helpers are macOS-specific. Top 10 #10's risk is now narrowly "write a Windows-safe writer".
+- pyrekordbox writes Rekordbox XML `TEMPO` elements (`Track.add_tempo`), i.e. tempo-change grids.
+
+**Added**
+- CUE-DETR (MIT) + EDM-CUE dataset: phrases are mostly 16 then 8 bars, not 32. Useful for auto-cues in whatstheID and
+  for drop/phrase priors in Creative Studio.
+- PeakNetFP is CC BY-NC-SA 4.0: personal use only.
+- Lexicon's free tier already converts libraries between DJ apps: don't rebuild that.
+
+**Killed:** nothing this round. The weakest whatstheID item is still the visualiser advice (design opinion, no
+evidence), and "share it with other DJs" (crowded field, legal exposure from downloading). Both stay low priority.
+

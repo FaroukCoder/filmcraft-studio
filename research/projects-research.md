@@ -100,8 +100,9 @@
 
 ### 10. Write Serato grids and cues with rb2serato's encoders
 - **Why:** [rb2serato](https://github.com/SM4RTENHEIMER/rb2serato) (MIT, Sep 2026) writes `Serato Markers2`, `Serato Markers_` and **locked** `Serato BeatGrid` tags whose bytes match what Serato writes, verified on a 9,600-track library, with undo logs and audio-byte checks. It also documents Serato 4's import quirks (crate header must be exactly `1.0/Serato ScratchLive Crate`, WAV typed `wave`, Serato closed while writing). That is the risky half of whatstheID's 4c plan, already done.
-- **Confidence: medium.** Tested on macOS only; its shell wrapper and APFS-clone safety step need Windows equivalents.
-- **First step:** vendor its encoder module into whatstheID, write a grid to a *copy* of one track, load it in Serato, confirm.
+- **Portability, checked in the source:** the encoders live in `src/rb2serato/seratotags.py`, which imports only `base64`, `struct` and `dataclasses` and says its output was verified byte-for-byte against files written by Serato DJ Pro 2.x–4.x; `encode_beatgrid` takes a list of markers, so multi-marker (tempo-change) grids are supported. The macOS-specific parts are elsewhere: `tagwriter.py` (APFS clone-and-swap) and `seratolib.py` (`/Volumes` paths). On Windows, vendor `seratotags.py` only and write your own safe writer with mutagen: copy → write tags → verify the audio payload is byte-identical → replace.
+- **Confidence: medium.** Encoders: high (verified output, pure Python). Windows writer and Serato 4's importer quirks: untested by anyone on Windows as far as I found.
+- **First step:** vendor `seratotags.py`, write a grid to a *copy* of one track, load it in Serato, confirm.
 
 ---
 
@@ -231,14 +232,16 @@ What you already have (from the repo): shazamio + AudD, your own landmark finger
 
 **Adopt**
 - rb2serato encoders for grids and cues (Top 10 #10). [serato-tools](https://pypi.org/project/serato-tools/) (Python ≥3.12) is an alternative; **pyserato is AGPL-3.0**, avoid if you ever distribute.
-- **Rekordbox:** [pyrekordbox](https://github.com/dylanljones/pyrekordbox) (MIT, active) and Rekordbox XML, whose `TEMPO` entries carry variable grids (tempo changes).
+- **Rekordbox:** [pyrekordbox](https://github.com/dylanljones/pyrekordbox) (MIT, active): its XML writer has `Track.add_tempo(Inizio, Bpm, Metro, Battito)`, one `TEMPO` element per grid section, which is how Rekordbox XML carries tempo changes; it also reads Rekordbox's own ANLZ beat grids.
+- **Cue points and phrases:** [CUE-DETR](https://github.com/ETH-DISCO/cue-detr) (MIT code, 2024) detects DJ cue points as objects on a spectrogram and ships the EDM-CUE dataset (4,710 tracks, ~21k cues placed by professional DJs). Its authors found most training tracks use **16-bar phrases, then 8-bar**, so don't hard-code 32. Check the checkpoint/dataset licence before shipping anything built on them.
+- **Don't rebuild conversion:** Lexicon (paid DJ library manager) has had a **free plan for importing and converting libraries between DJ apps** since v1.9 (Sep 2025) and supports Serato 4's database since v1.10. whatstheID's grid analysis tuned for techno is the part worth building; app-to-app conversion is solved.
 - **Grid quality:** fit the grid to the **kick attack**, not the energy peak (onset of the low band's envelope rise), per beat, then least-squares the tempo. rb2serato measured Serato's grid a median 8 ms ahead of Rekordbox's on 1,563 MP3s: check your offset against Serato on your own files.
 - **Downbeats/phrases:** score each of the 4 bar phases (and 8/16-bar phrase phases) by how well novelty peaks (energy, new elements, breakdown edges) land on them. Half-time D&B: prefer 170–176 over 85–88 by genre prior.
 - **IDs in long mixes:** segment first (novelty), then query the middle of each segment where one track plays alone, instead of a fixed 60 s grid; keep the speed ladder.
 - **Reference rbxport** ([rbxport.com](https://rbxport.com/)): a free Rekordbox library manager (not open source) by Chris Le, who also wrote [serato-connect](https://github.com/chrisle/serato-connect) (MIT). Its grid analysis is "tuned for electronic music"; I could not read details (site unreachable).
 - **Visualiser:** drive shaders from beat/bar/phrase *phase* from your analysis, not raw FFT amplitude: visuals lock to the music's structure. Butterchurn (MIT, Milkdrop in WebGL) is a reference; Hydra is AGPL.
 
-**Avoid:** Panako and Olaf (both AGPL-3.0) as code; read their papers for the tempo-invariant ideas.
+**Avoid:** Panako and Olaf (both AGPL-3.0) as code; read their papers for the tempo-invariant ideas. PeakNetFP ([code](https://github.com/guillemcortes/peaknetfp), ISMIR-era 2025, BMAT/Deezer/UPF) reports >90 % top-1 for time-stretch factors from 50 % to 200 %, but its repository is **CC BY-NC-SA 4.0**: personal use only, never in something you sell or share commercially. Your query-side speed ladder already covers the ±8 % a techno DJ realistically uses.
 
 **Soulseek-first downloads (not on `main` yet):** slskd is AGPL-3.0; calling its HTTP API from whatstheID as a separate process does not make whatstheID AGPL, but bundling or modifying slskd would. For a tool you share with other DJs, automated P2P downloading is also the part most likely to draw complaints: keep it a user-configured option, not a default.
 
