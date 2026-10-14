@@ -535,3 +535,21 @@ the exclusive group keeps one model loaded (asking for `vlm` unloads `agent`), `
 
 **Confidence changes:** Top 10 #6 stays medium (Windows, DPC latency and thermals untested) but its mechanics are
 now tested rather than read.
+
+## Round 20 — whatstheID: Serato tag format and licences (03:44–03:52 UTC)
+
+**Attack:** before writing a Serato grid writer, check that the encoder you'd vendor writes what Serato and the
+other parser expect, and what licences the write path drags in.
+
+- **Footer byte:** Holzhaus' format notes and serato-tools describe a one-byte footer after the `Serato BeatGrid`
+  markers; rb2serato's `encode_beatgrid` writes none, yet claims byte-for-byte fidelity. Checked its real Serato MP3
+  fixture: 14 bytes, one marker, **no footer**, so rb2serato matches at least that Serato version, and serato-tools'
+  parser tolerates a missing footer. No change; noted so it doesn't surprise you in a hex dump.
+- **Licences (PyPI metadata):** mutagen is **GPL-2.0-or-later**; whatstheID's `app/tags.py` uses it and serato-tools
+  requires it. Everything else in whatstheID's requirements is permissive (yt-dlp Unlicense, shazamio MIT, librosa
+  ISC, FastAPI/uvicorn/pydantic MIT/BSD). Added to the report: fine for personal use; share whatstheID under a
+  GPL-compatible licence or replace mutagen; keep tag-writing code out of the MIT/Apache fork. For the same reason I
+  did not add a Serato writer prototype to `research/prototypes/` (it would need mutagen); it belongs in whatstheID.
+- Prototypes' own dependencies checked: all permissive; stated in the prototypes README.
+
+**Kills:** the plan to add a Serato grid writer prototype to the fork. **Confidence changes:** none.

@@ -19,6 +19,11 @@ and should run on Windows, but **nobody has run them on Windows yet**.
 | `filmcraft_arabic_captions.jsonl` | #8 | Headless FilmCraft run: import an Arabic SRT, set an Arabic caption font, export with captions burned in | Built the fork's `filmcraft-cli` (Linux): default font gives "NO GLYPH" boxes; with Noto Sans Arabic named, joined letters in correct right-to-left order |
 | `llama-swap.example.yaml` | #6 | One exclusive GPU group: agent, small agent, two VLMs, Egyptian-Arabic ASR, ComfyUI; a `dj` profile | `llama-swap -validate` passes; served by a real llama-swap build in the test above |
 
+**Licences:** every dependency in `requirements.txt` is permissive (numpy, scipy, scikit-learn, soundfile, psutil,
+httpx: BSD; librosa: ISC; PySceneDetect: BSD-3; OpenCV: Apache-2.0; pydantic, PyYAML: MIT), so these scripts can live
+in the MIT/Apache fork. Serato tag writing is deliberately not here: the Python tag libraries (mutagen, and serato-tools
+on top of it) are GPL-2.0-or-later, so that code belongs in whatstheID.
+
 ## Setup (Windows, PowerShell, one command per line)
 
 ```powershell
