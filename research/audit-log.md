@@ -597,7 +597,7 @@ now measures it on the same 50 reels as the blind re-label).
 
 **Confidence changes:** Reel Brain repo linking stays medium (logic tested, real-data precision unknown).
 
-## Round 23 — the two licence claims nobody had read at the source (03:52–03:55 UTC)
+## Round 23 — the two licence claims nobody had read at the source (03:52–03:53 UTC)
 
 **Attack:** Top 10 #1 rested on secondary write-ups because Hugging Face is blocked from my fetch tool. Searched for
 the primary text instead; the search index quotes the official pages.
