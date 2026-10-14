@@ -1309,3 +1309,28 @@ stated below it comes from a search index of the primary page, and the report sa
 - **Contra in Egypt:** still unknown (no payout list found). Row unchanged.
 
 **Confidence changes:** none.
+
+## Round 60 — whatstheID's key detection: a bigger, human-labelled yardstick (06:27–06:33 UTC)
+
+**Attack (better alternatives, whatstheID):** the report covered tempo, grids, cues and downbeats but said nothing
+about key, the column whatstheID's own notes call weak (53 % exact / 94 % mixable on 17 tracks scored against
+Serato) and whose tag-writing stays off "until key exact% is much higher, on a reference set considerably larger
+than 17". Looked for a better detector first: S-KEY (Deezer, ICASSP 2025) reports a 72.1 % MIREX score on FMAKv2
+but no code release found and no GiantSteps number in what I could read (arXiv blocked here). Without audio I can't
+rank detectors honestly, so the move is the measurement, not a swap.
+
+**Built:** `key_benchmark.py`, which runs whatstheID's analyser over the two GiantSteps key datasets (human labels;
+cloned here, 604 + 1,349 usable labels, **364 in techno / tech-house / minimal**) and reports the MIREX weighted
+score, exact %, mixable % and the `key_uncertain` flag's catch rate, per genre, resumable.
+
+**Checked:** scoring agrees with mir_eval on all 576 reference/estimate pairs (mir_eval 0.8.2 only credits the
+fifth above; MIREX and mir_eval's main branch credit both, and so does the script). Ran whatstheID's real analyser
+through it on four synthetic tracks in known keys: 4/4 mixable, 2 exact, 2 a fifth off (my synthetic tracks put a
+subdominant bar in every fourth bar, which likely explains the fifths). The GiantSteps audio itself is blocked from
+this sandbox (JKU mirror: proxy 403), so no real numbers.
+
+**Caught before it went in:** the MTG set ships Beatport's own key tag, and the first run made it look like Beatport
+was right 25 % of the time (16 % on techno). It isn't a measurement: 1,317 of 1,349 tags say "major" while the
+labels are 68 % minor, so the column has lost the mode. Removed that option and noted why in the script.
+
+**Confidence changes:** none (not a Top 10 item; it's the step that decides whether key tagging ever gets turned on).
