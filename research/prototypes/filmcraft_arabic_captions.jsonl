@@ -1,0 +1,14 @@
+# Burn an Egyptian code-switched caption into a short export with your FilmCraft fork, headless.
+# Run from this folder (PowerShell), with filmcraft-cli built from the fork and ar.srt beside it:
+#   filmcraft-cli --demo run filmcraft_arabic_captions.jsonl
+# ar.srt (UTF-8):
+#   1
+#   00:00:00,200 --> 00:00:02,800
+#   الحفلة بدأت يا جماعة، استعدوا للـ drop
+# Delete the captions.setStyle line to see the failure: with the default font (Inter) every Arabic
+# letter is a "NO GLYPH" box (upstream #1475). With an Arabic face named, it renders correctly
+# (tested on Linux with Noto Sans Arabic installed; on Windows "Segoe UI" or an installed
+# Noto Sans Arabic). Paths are relative to where you run it.
+{"id":"file.import","params":{"paths":["ar.srt"]}}
+{"id":"captions.setStyle","params":{"track":"C1","font":"Noto Sans Arabic","size":64}}
+{"id":"file.exportMedia","params":{"path":"ar_burn.mp4","format":"h264","range":"custom","startSeconds":0,"endSeconds":2.5,"burnCaptions":true,"audio":false,"wait":true}}

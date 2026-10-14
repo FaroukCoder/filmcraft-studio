@@ -4,7 +4,7 @@ Session started 2026-10-14 01:48 UTC. Report: `projects-research.md` (same folde
 
 ## Context gathered before round 1 (from your repos)
 - **whatstheID** (private repo, `main` @ 8f88cc5): already has shazamio + AudD fallback, a self-built landmark
-  fingerprinter against your own library with a query-side speed ladder (±4% pitch), a librosa-based
+  fingerprinter against your own library with a query-side speed ladder (±8 % in 1 % steps; corrected in round 16 from "±4 %"), a librosa-based
   comb-filter tempo estimator (0.01 BPM MAE vs Serato on 17 tracks), a key ensemble (53% exact / 94% mixable),
   a read-only Serato `database V2` / `.crate` parser, and a hand-written WebGL2 engine ("Needlepoint").
   Not built: Serato write-back (crates, cue points, beat grids), Soulseek downloads (no slskd code on `main`).
