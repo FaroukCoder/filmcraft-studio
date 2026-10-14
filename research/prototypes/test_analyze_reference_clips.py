@@ -128,6 +128,13 @@ def main() -> int:
         problems.append(f"on-phrase {row['cuts_on_phrase8_pct']} (want 28.6)")
     if not row["drop_at_s"] or abs(float(row["drop_at_s"]) - 16.0) > 0.45:
         problems.append(f"drop at {row['drop_at_s']} (want 16.0)")
+        # beats must sit on the kicks, not on the onset envelope's late peak (19-31 ms on a
+        # recorded loop), or a cut one frame before the kick reads as off-beat
+        beats, _, _ = arc.track_beats(tmp / "a.wav", 118, 175)
+        true = np.arange(0, DURATION, BEAT)
+        err = np.array([np.min(np.abs(true - b)) for b in beats if not (BREAKDOWN[0] <= b < BREAKDOWN[1])])
+        if len(err) == 0 or float(np.median(err)) > 0.010:
+            problems.append(f"beats are {1000 * float(np.median(err)) if len(err) else -1:.1f} ms off the kicks")
     problems += strobe_problems
     if problems:
         print("FAIL\n  " + "\n  ".join(problems))

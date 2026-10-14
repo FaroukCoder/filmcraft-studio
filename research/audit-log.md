@@ -1045,3 +1045,19 @@ says to write the exporter against the Web API while Eagle is open, not against 
 names were not confirmed (the docs host is unreachable here): the playground shows them on your machine.
 
 **Confidence changes:** none (2.5 has no Top 10 item).
+
+## Round 46 — the reference-clip analyser on a real kick (05:27–05:30 UTC)
+
+**Attack:** Top 10 #6's analyser had only seen synthetic audio. Ran its beat tracking on the recorded techno loop
+from round 39.
+
+**Found:** tempo right (125.005 BPM via its beat-time regression; librosa alone says 123.05), but its librosa beats
+sat **19–31 ms after each kick** (the onset-envelope lag again). With the ±60 ms on-beat tolerance, a cut placed one
+frame *before* the kick (a common editing habit) reads as ~65 ms off and is counted off-beat, biasing the very
+statistic #6 exists to measure. Fixed: the librosa fallback shifts its beats by their median lag to the kick
+transients (same 1 kHz / 20 % rule as `serato_writeback.py`; one constant shift, so tempo and spacing are untouched).
+Real loop after: within ±10 ms. That broke `bar_phase`, which sampled the onset envelope exactly at each beat; it now
+takes the envelope's maximum over the 60 ms after each beat, so it works with either timing. The test now also
+asserts beats within 10 ms of the true kicks (22 ms median before the fix). Beat This, when installed, is untouched.
+
+**Confidence changes:** none; #6's statistics lose a systematic bias before you ever run them.

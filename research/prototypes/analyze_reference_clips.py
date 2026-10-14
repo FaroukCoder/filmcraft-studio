@@ -139,7 +139,33 @@ def track_beats(wav: Path, bpm_min: float, bpm_max: float) -> tuple[np.ndarray, 
     onset = librosa.onset.onset_strength(y=y, sr=sr, fmax=200, n_mels=32)
     tempo, frames = librosa.beat.beat_track(onset_envelope=onset, sr=sr, start_bpm=(bpm_min + bpm_max) / 2, units="frames")
     beats = librosa.frames_to_time(frames, sr=sr)
-    return beats, None, "librosa"
+    return snap_to_kicks(y, sr, beats), None, "librosa"
+
+
+def snap_to_kicks(y: np.ndarray, sr: int, beats: np.ndarray) -> np.ndarray:
+    """Shift onset-envelope beats onto the kick transients. librosa's beats sit 19-31 ms
+    after the kick on a recorded techno loop (onset envelopes peak late), which would count
+    a cut placed one frame before the kick as off-beat. One constant shift (the median over
+    all beats, so a breakdown can't drag it) keeps the tempo and spacing; per-beat snapping
+    would add jitter. Same rule as serato_writeback.py: 1 kHz low-pass, 20 % of the rise."""
+    from scipy.signal import butter, sosfiltfilt
+
+    if len(beats) < 4:
+        return beats
+    env = np.abs(sosfiltfilt(butter(4, 1000.0, btype="low", fs=sr, output="sos"), np.asarray(y, dtype=float)))
+    w = max(1, int(0.002 * sr))
+    env = np.convolve(env, np.ones(w) / w, mode="same")
+    floor = float(np.percentile(env, 50))
+    offs = []
+    for b in beats:
+        a0, b0 = int((b - 0.06) * sr), int((b + 0.03) * sr)
+        if a0 < 0 or b0 > env.size:
+            continue
+        seg = env[a0:b0]
+        lo, hi = float(seg.min()), float(seg.max())
+        if hi - lo > floor:
+            offs.append((a0 + int(np.argmax(seg >= lo + 0.2 * (hi - lo)))) / sr - b)
+    return beats + float(np.median(offs)) if len(offs) >= 4 else beats
 
 
 def tempo_from_beats(beats: np.ndarray) -> float:
@@ -177,8 +203,11 @@ def bar_phase(beats: np.ndarray, downbeats: np.ndarray | None, wav: Path) -> int
 
     y, sr = librosa.load(str(wav), sr=None, mono=True)
     onset = librosa.onset.onset_strength(y=y, sr=sr, fmax=150, n_mels=24)
-    idx = np.clip(librosa.time_to_frames(beats, sr=sr), 0, len(onset) - 1)
-    energy = onset[idx]
+    # The envelope peaks a few frames after the kick's transient, and beats may be placed on
+    # either, so take its maximum over the 60 ms after each beat rather than one sample.
+    i0 = np.clip(librosa.time_to_frames(beats, sr=sr), 0, len(onset) - 1)
+    i1 = np.clip(librosa.time_to_frames(beats + 0.06, sr=sr), 0, len(onset) - 1)
+    energy = np.array([onset[a:max(a + 1, b + 1)].max() for a, b in zip(i0, i1)])
     scores = [energy[p::4].mean() if len(energy[p::4]) else 0.0 for p in range(4)]
     return int(np.argmax(scores))
 
