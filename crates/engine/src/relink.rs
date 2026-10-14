@@ -575,12 +575,17 @@ fn status_json(s: &Session, id: ItemId) -> Option<Value> {
         MediaRef::File { path } => Some(path.clone()),
         MediaRef::Generator(_) => None,
     };
+    let mut error = None;
     let status = match &path {
         None => "generated",
         Some(_) if m.offline => "offline",
         Some(p) if s.services.file_size(p).is_err() => "missing",
-        Some(_) => match s.media.offline_status(id) {
-            Some(o) if o.reason == filmcraft_render::offline::OfflineReason::Unreadable => "unreadable",
+        // decode a frame (once per source) so undecodable video is not reported online
+        Some(_) => match s.media.probe(&s.project, id, &*s.services) {
+            Some(o) if o.reason == filmcraft_render::offline::OfflineReason::Unreadable => {
+                error = Some(o.error);
+                "unreadable"
+            }
             _ => "online",
         },
     };
@@ -593,6 +598,7 @@ fn status_json(s: &Session, id: ItemId) -> Option<Value> {
         "name": it.name,
         "path": path,
         "status": status,
+        "error": error,
         "identity": m.identity,
         "proxy": proxy,
     }))
@@ -618,7 +624,7 @@ pub fn commands() -> Vec<CommandSpec> {
             label: "Media Status",
             menu: &[],
             shortcut: None,
-            params: r#"{"item":id?}"#,
+            params: r#"{"item":id?}  (status: online | offline | missing | unreadable (with the decoder's `error`) | generated; video is decoded once to tell)"#,
             enabled: always,
             run: |s, p| {
                 let ids: Vec<ItemId> = match u64_p(p, "item") {

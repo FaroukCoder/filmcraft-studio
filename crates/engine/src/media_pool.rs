@@ -48,6 +48,8 @@ pub struct MediaPool {
     sources: RwLock<HashMap<ItemId, (String, SharedSource)>>,
     proxies: RwLock<HashMap<ItemId, (String, SharedSource)>>,
     offline: Arc<RwLock<HashMap<ItemId, OfflineStatus>>>,
+    /// Items whose current source [`MediaPool::probe`] has decoded a frame of.
+    probed: RwLock<std::collections::HashSet<ItemId>>,
     use_proxies: AtomicBool,
     /// Openers tried before the built-in ones (MP4/MOV + codecs register here).
     pub openers: RwLock<Vec<Opener>>,
@@ -60,6 +62,7 @@ impl Default for MediaPool {
             sources: RwLock::new(HashMap::new()),
             proxies: RwLock::new(HashMap::new()),
             offline: Arc::new(RwLock::new(HashMap::new())),
+            probed: RwLock::new(Default::default()),
             use_proxies: AtomicBool::new(false),
             openers: RwLock::new(filmcraft_codecs::openers()),
         }
@@ -142,17 +145,20 @@ impl MediaPool {
 
     /// Cache a source for an item, valid whatever the item's reference (generators).
     pub fn insert(&self, item: ItemId, src: SharedSource) {
+        self.probed.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
         self.sources.write().unwrap_or_else(|e| e.into_inner()).insert(item, (String::new(), src));
     }
 
     /// Cache a source for an item under its [`media_key`].
     pub fn insert_keyed(&self, item: ItemId, key: String, src: SharedSource) {
+        self.probed.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
         self.sources.write().unwrap_or_else(|e| e.into_inner()).insert(item, (key, src));
     }
 
     /// Cache a source opened from `path` for an item.
     pub fn insert_file(&self, item: ItemId, path: &str, src: SharedSource) {
         self.offline.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
+        self.probed.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
         let src = self.unsupported_as_slate(item, path, src);
         self.sources.write().unwrap_or_else(|e| e.into_inner()).insert(item, (format!("file:{path}"), src));
     }
@@ -166,6 +172,7 @@ impl MediaPool {
 
     pub fn remove(&self, item: ItemId) {
         self.sources.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
+        self.probed.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
         self.proxies.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
         self.offline.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
     }
@@ -173,6 +180,7 @@ impl MediaPool {
     /// Forget every opened source (files are re-read on next use).
     pub fn clear(&self) {
         self.sources.write().unwrap_or_else(|e| e.into_inner()).clear();
+        self.probed.write().unwrap_or_else(|e| e.into_inner()).clear();
         self.proxies.write().unwrap_or_else(|e| e.into_inner()).clear();
         self.offline.write().unwrap_or_else(|e| e.into_inner()).clear();
     }
@@ -197,6 +205,28 @@ impl MediaPool {
     /// Why an item last rendered offline (None = online or not opened yet).
     pub fn offline_status(&self, item: ItemId) -> Option<OfflineStatus> {
         self.offline.read().unwrap_or_else(|e| e.into_inner()).get(&item).cloned()
+    }
+
+    /// Decode the first frame of a file item's full-resolution picture, once per source, so video
+    /// the decoder cannot read (10-bit or 4:2:2 H.264, a codec without a decoder...) is marked
+    /// unreadable now rather than at the first render: import and `media.status` say so before an
+    /// export draws the slate. Returns the item's offline status (None = online). Subclips probe
+    /// their media.
+    pub fn probe(&self, p: &Project, item: ItemId, services: &dyn Services) -> Option<OfflineStatus> {
+        let (media, m, _) = p.resolve_media(item)?;
+        let probed = self.probed.read().unwrap_or_else(|e| e.into_inner()).contains(&media);
+        if matches!(m.media, MediaRef::File { .. })
+            && m.info.has_video()
+            && !probed
+            && self.offline_status(media).is_none()
+            && let Some(src) = self.full_res_source(p, media, services)
+        {
+            // an unsupported picture marks the item unreadable (`UnsupportedAsSlate`); other
+            // errors (one damaged frame) leave it online
+            let _ = src.video_frame(FrameRequest { time: filmcraft_time::Tick::ZERO, scale: 1.0 / 16.0 });
+            self.probed.write().unwrap_or_else(|e| e.into_inner()).insert(media);
+        }
+        self.offline_status(media)
     }
 
     /// Open a file through the registered openers.
@@ -284,6 +314,7 @@ impl MediaPool {
                 }
             },
         };
+        self.probed.write().unwrap_or_else(|e| e.into_inner()).remove(&item);
         self.sources.write().unwrap_or_else(|e| e.into_inner()).insert(item, (key, src.clone()));
         Some(src)
     }
@@ -663,5 +694,56 @@ mod tests {
         let st = s.media.offline_status(item).unwrap();
         assert_eq!(st.reason, OfflineReason::Unreadable);
         assert!(st.error.contains("H.264") && st.error.contains("chroma_format_idc 3"), "{}", st.error);
+    }
+
+    /// Undecodable video is reported unreadable by `file.import` and `media.status` before any frame
+    /// is rendered (both used to say nothing / `online` until a render drew the slate); a project
+    /// opened in a new session (no import) is probed by `media.status` itself. 8-bit 4:2:0 stays
+    /// online.
+    #[test]
+    fn ffmpeg_import_and_media_status_report_undecodable_video() {
+        use serde_json::json;
+        let Some(ffmpeg) = filmcraft_testkit::oracle::ffmpeg_or_skip("media_pool") else { return };
+        let fixture = |name: &str, pix: &'static str| {
+            let path = filmcraft_testkit::fixtures_dir("engine/media_pool").join(name);
+            filmcraft_testkit::fixtures::generate(&path, |tmp| {
+                std::process::Command::new(&ffmpeg)
+                    .args(["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=64x32:rate=24:duration=0.5"])
+                    .args(["-c:v", "libx264", "-preset", "fast", "-pix_fmt", pix])
+                    .arg(tmp)
+                    .status()
+                    .is_ok_and(|s| s.success())
+            })
+        };
+        let (Some(ten), Some(four22), Some(ok)) =
+            (fixture("h264_10bit_64x32.mp4", "yuv420p10le"), fixture("h264_422_64x32.mp4", "yuv422p"), fixture("h264_420_64x32.mp4", "yuv420p"))
+        else {
+            return;
+        };
+        let mut s = crate::Session::default();
+        let paths: Vec<String> = [&ten, &four22, &ok].iter().map(|p| p.to_string_lossy().into_owned()).collect();
+        let r = s.execute("file.import", json!({"paths": paths})).unwrap();
+        let ids: Vec<u64> = r["items"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+        assert_eq!(ids.len(), 3, "{r}");
+        let un = r["unreadable"].as_array().unwrap_or_else(|| panic!("no `unreadable` in {r}"));
+        assert_eq!(un.iter().map(|u| u["item"].as_u64().unwrap()).collect::<Vec<_>>(), ids[..2], "{r}");
+        assert!(un[0]["error"].as_str().unwrap().contains("only 8-bit"), "{r}");
+        assert!(un[1]["error"].as_str().unwrap().contains("only 4:2:0"), "{r}");
+        let status = |s: &mut crate::Session, i: u64| s.execute("media.status", json!({"item": i})).unwrap()[0].clone();
+        assert_eq!(status(&mut s, ids[0])["status"], json!("unreadable"));
+        assert!(status(&mut s, ids[1])["error"].as_str().unwrap().contains("4:2:0"));
+        assert_eq!(status(&mut s, ids[2])["status"], json!("online"));
+        // a fresh session that opens the project has decoded nothing yet
+        let dir = filmcraft_testkit::workspace_root().join("target").join(format!("media-status-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let proj = dir.join("p.fcproj").to_string_lossy().into_owned();
+        s.execute("file.save", json!({"path": proj})).unwrap();
+        let mut t = crate::Session::default();
+        t.execute("file.open", json!({"path": proj})).unwrap();
+        assert!(t.media.offline_status(ItemId(ids[0])).is_none(), "nothing decoded yet");
+        let all = t.execute("media.status", json!({})).unwrap();
+        let st = |i: u64| all.as_array().unwrap().iter().find(|x| x["item"] == json!(i)).unwrap()["status"].clone();
+        assert_eq!((st(ids[0]), st(ids[1]), st(ids[2])), (json!("unreadable"), json!("unreadable"), json!("online")), "{all}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

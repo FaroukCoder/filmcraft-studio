@@ -227,7 +227,10 @@ unmounted media folder doesn't pass as a good render. `--allow-offline` accepts 
 frames: the warning stays and the exit status is 0. The export result lists the same items as
 `offlineMedia` (`[{item, name, path, status, error}]`, `status` as in `media.status`: `missing`,
 `offline` or `unreadable`), and `[]` when every clip it drew was online; check before exporting with
-`exec media.status` or `exec media.findMissing`.
+`exec media.status` or `exec media.findMissing`. `file.import` and `media.status` decode a file's
+first frame, so video FilmCraft cannot decode (10-bit or 4:2:2 H.264, for example) is reported at
+once: `file.import` lists it in `unreadable` (`[{item, name, path, error}]`; the item is still
+imported) and `media.status` says `unreadable` with the decoder's `error`.
 
 `markers.exportCsv {path}` exports all markers in the active sequence, including colours hidden
 in the UI and markers outside In/Out, sorted by start then id. The UTF-8 CSV has a header and CRLF

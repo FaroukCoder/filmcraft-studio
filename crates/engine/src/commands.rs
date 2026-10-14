@@ -619,6 +619,8 @@ fn import_source(
         ))
     })?;
     s.media.insert_file(id, path, src);
+    // decode one frame now, so video FilmCraft cannot decode is reported unreadable at import
+    s.media.probe(&s.project, id, &*s.services);
     Ok(id)
 }
 
@@ -1199,6 +1201,18 @@ fn build() -> Vec<CommandSpec> {
             crate::relink::refresh(s);
             for item in was_missing.iter().filter(|i| !s.offline.missing.contains(i)) {
                 s.media.remove(*item);
+            }
+            // imported, but its picture is undecodable: it renders as the MEDIA UNREADABLE slate
+            let unreadable: Vec<Value> = ids
+                .iter()
+                .filter_map(|i| {
+                    let o = s.media.offline_status(ItemId(*i)).filter(|o| o.reason == filmcraft_render::offline::OfflineReason::Unreadable)?;
+                    let name = s.project.item(ItemId(*i)).map(|it| it.name.clone()).unwrap_or_default();
+                    Some(json!({"item": i, "name": name, "path": o.path, "error": o.error}))
+                })
+                .collect();
+            if !unreadable.is_empty() {
+                out["unreadable"] = json!(unreadable);
             }
             Ok(out)
         }),

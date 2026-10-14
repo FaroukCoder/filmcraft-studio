@@ -268,7 +268,7 @@ have no identity, so relinking them skips the fingerprint check.
 | Command | |
 |---|---|
 | `media.findMissing` | `{missing: [{item, name, fileName, path, status: missing\|offline\|proxyMissing, duration, startTimecode}]}` |
-| `media.status {item?}` | per item: `online`, `missing`, `offline`, `unreadable` or `generated`, plus identity and proxy |
+| `media.status {item?}` | per item: `online`, `missing`, `offline`, `unreadable` (with the decoder's `error`; a file's first frame is decoded once to tell) or `generated`, plus identity and proxy |
 | `media.linkMedia` | File ▸ Link Media… (rescans; the UI opens the dialog) |
 | `media.relink {item, path, force?, relinkOthers?=true, alignTimecode?, match?}` | check, link, then the others |
 | `media.autoRelink {from, to}` / `{folder}` | batch relink: a folder-prefix remap, or a search of a folder tree |
