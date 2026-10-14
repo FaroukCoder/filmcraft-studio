@@ -97,3 +97,30 @@ reframing idea, HyperFrames, the planner/judge design, the "measure reference cl
 **Open for later rounds:** Timeline-Bench kappa figure (search snippet only; arXiv unreachable); MiniMax H3 licence
 text (HF unreachable); whether Instagram's API path allows reels with their own audio (one third-party claim says no).
 
+## Round 3 — Hermes + Laya audit (02:20–02:30 UTC)
+
+**Attacked:** the llama.cpp move, Tool Search, model choice, memory layer, "acting on plans", Laya fine-tuning,
+GPU scheduling between agents. Read Hermes issues directly on GitHub.
+
+**Killed or reversed**
+- **"Turn on Tool Search"** (round 1 Top 10 #3, now #4) → reversed for Qwen models. Its bridge tool is named
+  `tool_call`, which collides with Qwen's `<tool_call>` template tag; the turn halts after five malformed calls
+  (hermes-agent #110442, open; fix PR unmerged). Workaround: Tool Search off, trim tools by hand.
+- **"Local Qwen3.6 gives reliable tool use"** → softened. Open issues show a tool call stranded in reasoning in
+  1 of 23 turns (#129440), corrupted output without the right chat template (#29677), and a glob/regex loop
+  (#66129). The honest target is "recovers well", not "never fails".
+
+**Added**
+- Hermes v0.21.0 made `state.db` fragile; v0.21.2 fixed it (44 issues). Use `hermes backup`.
+- `/goal`, cron no-agent mode and Kanban `--goal` cards cover "acting on plans" without new code.
+- MCPVault (MIT) as the single vault MCP server; Smart Connections plugin is now under a proprietary licence.
+- Laya fine-tuning pitfalls from open issues: 4-epoch default collapses on small datasets (#963); custom
+  checkpoints not yet servable through the Router (#919).
+- GPU broker: concrete unload endpoints (Ollama `keep_alive: 0`, ComfyUI Manager `POST /api/free`), and the
+  DPC-latency reason the DJ guard matters.
+
+**Confidence changes:** Top 10 #4 stays medium but the item now carries its failure rates. Top 10 #2 (Laya) stays
+high for "measure and fine-tune"; how much it gains on your routes is unknown.
+
+**Open:** TAU2 numbers (81.2 vs 68.2) are vendor-adjacent; no independent Hermes-specific benchmark of local models.
+
