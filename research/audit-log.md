@@ -162,3 +162,23 @@ whether sharing the tool makes sense, competitors.
 **Killed:** nothing this round. The weakest whatstheID item is still the visualiser advice (design opinion, no
 evidence), and "share it with other DJs" (crowded field, legal exposure from downloading). Both stay low priority.
 
+## Round 6 — cross-project audit (02:23–02:30 UTC)
+
+**Attacked:** whether the shared GPU broker needs custom code, how the pieces fit together, and my own bias toward
+adding things.
+
+**Killed or reversed**
+- **"Write a GPU broker (SQLite lease table, FastAPI)"** → replaced by llama-swap (MIT, WinGet), which already
+  manages llama-server, whisper.cpp, stable-diffusion.cpp and ComfyUI (dedicated `/comfyui/` endpoint) in exclusive
+  groups, with an unload API and TTLs. Only the DJ guard (~30 lines) is new code. Effort 1–2 days → 0.5–1 day.
+
+**Bias check.** Every round so far added tools. The thing most likely to sink these projects is not a missing tool
+but spread: five projects plus a fork of a fast-moving editor, one person, one GPU. Added "The blunt version" at the
+top of the report with the stop/start calls (no canvas app, no public whatstheID, no generated footage in paid
+clips, Laya fixed or removed, heavy coding stays on Claude Code).
+
+**Added:** one small labelled set per project, kept in the vault, as the shared measuring stick.
+
+**Consistency fix:** Hermes (Top 10 #4) now points at llama-swap so it doesn't hold the card outside the shared
+scheduler.
+

@@ -8,6 +8,16 @@
 > expert offload (the fastest way to run a 30B-class model on 12 GB) need roughly 32 GB of RAM, ideally 64 GB.
 > Wherever that matters, both options are given.
 
+## The blunt version
+
+- **Creative Studio is the right top priority, and the LLM is not where its quality comes from.** In a September 2026 benchmark of agents editing raw footage, the best resolved 27 % of tasks, failing mostly on craft. Your edge is signal (beats, drops, phrases, pose, Serato's own logs) plus your taste. Use the model to fill in a plan, not to judge one.
+- **Laya, as shipped, is close to a coin toss.** Its own README says the base checkpoints are near chance zero-shot. Fine-tune and calibrate it on your labels, or take it out of the path.
+- **A 12 GB local agent will not be as reliable as Claude Code.** Expect a few percent of tool turns to need a retry. Use Hermes for routing, automation and vault work; keep heavy coding on Claude Code.
+- **Don't build the Inspiration Canvas app.** Store boards as JSON Canvas in your vault (or buy Eagle for $35) and spend the time on Creative Studio.
+- **Don't take whatstheID public.** The "paste a mix, get a tracklist" space is crowded and the download features carry legal risk. Finish the Serato write-back; it is the part nobody else does.
+- **Generated video (MiniMax H3) and generated stills (Qwen-Image 2.1) don't belong in paid club clips,** for licence reasons and because the product is that it was real.
+- **Five projects plus a FilmCraft fork is too many for one person.** The Top 10 is ordered so the first week touches only Creative Studio, Hermes/Laya and the shared GPU setup.
+
 ---
 
 ## 1. Top 10 moves (ranked by impact ÷ effort)
@@ -19,7 +29,7 @@
 | 3 | Serve vision/structured-output models with llama.cpp, not Ollama, and bound the JSON | Reel Brain, Creative Studio | 0.5–1 day | medium |
 | 4 | Move Hermes to llama.cpp with MoE expert offload; trim tools by hand (Tool Search breaks Qwen) | Hermes | 0.5–1 day | medium |
 | 5 | Measure 40 reference clips and turn "Boiler Room style" into numbers | Creative Studio | 1 day | high |
-| 6 | One GPU broker with a DJ-mode guard, plus a clock cap and thermal check | all | 1–2 days | medium |
+| 6 | Put every GPU server behind llama-swap, add a DJ-mode guard, cap clocks and check VRAM temps | all | 0.5–1 day | medium |
 | 7 | Get your sets' beat grids from your own track files and Serato's history | Creative Studio, whatstheID | 2–4 days | medium |
 | 8 | Encode one house look per client: type, motion grammar on the bar grid, grade from footage | Creative Studio | 2–3 days | low |
 | 9 | Reframe from body pose + an L1-optimal camera path, not faces alone | Creative Studio | 2–3 days | medium |
@@ -56,7 +66,7 @@
 - **Also:** be on ≥ v0.21.2: v0.21.0's session-store rewrite made `state.db` fragile and v0.21.2 closed 44 issues about it. Run `hermes backup` nightly (the docs say never to copy `state.db` alone).
 - **Confidence: medium.** Docs and issues read directly; speed numbers are from a slower card; the failure rates are single reports.
 - **Could fail if:** RAM is 16 GB, or your MCP tool set is so large that the eager schema blows the context. Keep your current Qwen3-Coder-30B/Ollama config as a fallback profile until the new one has a week of clean logs.
-- **First step:** `hermes prompt-size` and `hermes tools` today; then start `llama-server` with Qwen3.6-35B-A3B and replay 20 of your logged requests against both setups.
+- **First step:** `hermes prompt-size` and `hermes tools` today; then start `llama-server` with Qwen3.6-35B-A3B (behind llama-swap, Top 10 #6, so it shares the card politely) and replay 20 of your logged requests against both setups.
 
 ### 5. Measure 40 reference clips
 - **Why:** I found **no published description** of how Boiler Room, BCCO or HÖR cut their shorts. Guessing produces the "stock" look. Your own whatstheID notes show the method that works for you: measure, then build.
@@ -65,13 +75,14 @@
 - **Confidence: high** that it pays off; the numbers it finds are unknown by definition.
 - **First step:** a 50-line script over a folder of clips → CSV; look at the medians.
 
-### 6. One GPU broker with a DJ-mode guard
-- **Why:** every project competes for one 12 GB GPU and the PC has crashed on long runs. A single broker turns that into scheduling, not luck.
-- **Do:** a tiny local service (SQLite lease table, FastAPI or plain socket): each job asks for a lease with priority and an estimated VRAM; before granting a large job the broker empties the card through the tools' own endpoints (Ollama: a request with `keep_alive: 0`; llama-swap: its unload endpoint or TTLs; ComfyUI: `POST /api/free {"unload_models": true, "free_memory": true}`, the same route as ComfyUI Manager's toolbar button); it **refuses all GPU jobs while `Serato DJ Pro.exe` / `Serato DJ Lite.exe` / `Ableton Live*.exe` is running** (psutil) and unloads whatever is resident; every job checkpoints so a refused or killed job resumes. Hermes cron's no-agent mode can drain the queue at night without an LLM in the loop.
+### 6. Put every GPU server behind llama-swap, plus a small DJ-mode guard
+- **Why:** every project competes for one 12 GB GPU and the PC has crashed on long runs. You do not need to write a broker: [llama-swap](https://github.com/mostlygeek/llama-swap) (MIT, active, WinGet package for Windows) already starts and stops GPU servers on demand and keeps only one group loaded. It handles llama-server (LLM and VLM), whisper.cpp, stable-diffusion.cpp, audio.cpp and **ComfyUI** (a dedicated `/comfyui/` endpoint and a reserved `comfyui_auto` model ID so the browser websocket doesn't pin the GPU), plus `/upstream/<model>/` passthrough for anything else HTTP. `groups` with `exclusive: true` give the "only one big thing at a time" rule; `POST /api/models/unload` empties the card; `ttl` frees idle models.
+- **Do:** (1) define each GPU workload as a llama-swap model (agent LLM, VLM, ASR, ComfyUI) in one exclusive group; (2) point Hermes (`providers.llamacpp.base_url`), Reel Brain, Creative Studio and ComfyUI clients at llama-swap instead of their own servers; (3) a ~30-line **DJ guard** that polls for `Serato DJ Pro.exe` / `Serato DJ Lite.exe` / `Ableton Live*.exe` (psutil), calls `POST /api/models/unload` and stops the llama-swap service until they exit; (4) make every batch job checkpoint per item and retry on connection refused, so the guard costs a pause, not a lost run. Hermes cron's no-agent mode can drain the queue at night.
+- **Trade-off:** Hermes' managed runtime sizes context and expert offload for you; behind llama-swap you set `--n-cpu-moe`, `-c` and the chat template yourself in the YAML. That is ten lines, once.
 - **Why the DJ guard matters beyond VRAM:** NVIDIA driver DPC-latency spikes of 3–10 ms are a known cause of audio dropouts on Windows; heavy CUDA work makes it worse. Run LatencyMon once with a GPU job active and once without, while Serato plays.
 - **Hardware side:** on RTX 30-series, crashes under load are often millisecond transients that a power cap does not stop. Cheap things to try: cap the core clock (`nvidia-smi -lgc 210,1700` as admin, or an Afterburner curve), and watch **GDDR6X memory junction temperature** in HWiNFO during a long LLM or Whisper run (memory-bound work behaves like mining; 3080-class cards reach 104–110 °C there). If junction temps are high, thermal pads; if crashes persist at a capped clock, suspect the PSU.
-- **Confidence: medium.** The broker is standard engineering; the crash diagnosis is from forum reports, not your logs.
-- **First step:** log `nvidia-smi --query-gpu=power.draw,clocks.gr,temperature.gpu,memory.used --format=csv -l 1` plus HWiNFO memory junction during the next long Reel Brain batch.
+- **Confidence: medium.** llama-swap's features are documented in its README and guides; nobody I found runs exactly this mix on Windows. The crash diagnosis is from forum reports, not your logs.
+- **First step:** install llama-swap, move one workload (the VLM) behind it, and log `nvidia-smi --query-gpu=power.draw,clocks.gr,temperature.gpu,memory.used --format=csv -l 1` plus HWiNFO memory-junction temperature during the next long Reel Brain batch.
 
 ### 7. Beat grids for your own sets from your own track files
 - **Why:** blind beat tracking on a 150 BPM mix fights overlapping kicks in transitions, pitch riding and breakdowns. You have better information. **Serato DJ 4 logs every load** in `master.sqlite` → `history_entry` (artist, title, BPM, key, deck, `start_time`, `played`; verified in the [whats-now-playing reader](https://github.com/whatsnowplaying/whats-now-playing/blob/main/nowplaying/serato/reader.py)). Your library files carry Serato's beat grid (`Serato BeatGrid` GEOB). Align each played track to the set recording (your cross-correlation code plus whatstheID's speed ladder), then transform that track's grid into set time. This is the published "DJ-mix reverse engineering" approach (Schwarz & Fourer; Kim et al., ISMIR 2020).
@@ -260,8 +271,8 @@ What you already have (from the repo): shazamio + AudD, your own landmark finger
 
 ## 3. Cross-project shared pieces
 
-1. **GPU broker with DJ-mode guard** (Top 10 #6): every project.
-2. **One local model server** (llama.cpp / llama-swap, MIT) instead of Ollama + Hermes runtime + ComfyUI each loading their own copy: one place to unload, one place to measure.
+1. **llama-swap in front of every GPU server, plus the DJ guard** (Top 10 #6): one place to load, unload and measure, instead of Ollama, Hermes' runtime and ComfyUI each holding their own copy of the card.
+2. **One small labelled set per project, kept in the vault:** 200 Laya routes, 20 failing reels + 50 blind re-labels, 40 reference clips + your keep/skip shot labels, 17+ Serato reference grids (you already have these). Every change gets measured against them, which is how whatstheID got its tempo error to 0.01 BPM.
 3. **One vault access layer:** a single MCP server over the Obsidian vault (read/write notes, search by text and embeddings) used by Hermes, Claude Code, Reel Brain and the canvas. You already write to the vault via `learn-to-vault` / claude-obsidian (Karpathy LLM-wiki pattern); don't add a second memory database that drifts from it.
 4. **One verification module** for "does this search hit really match": whatstheID's `verify.py` rules reused for Reel Brain's tool→repo links.
 5. **Shared audio analysis:** whatstheID's comb-filter tempo and key code, Beat This, and Serato readers serve both whatstheID and Creative Studio.
