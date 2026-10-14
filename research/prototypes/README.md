@@ -27,14 +27,14 @@ and should run on Windows, but **nobody has run them on Windows yet**.
 | `test_pipeline_e2e.py` | #5 | The chain: fake Serato history → ID captions; two synced angles → `shot_picker` → plan → `plan_to_filmcraft` → MP4 | Against upstream v0.7.2: 1080×1920, 19.2 s, cuts on bar lines (frames 0/192/288), both ID captions burned in, audio present. SKIP without a build |
 | `plan_to_filmcraft.py` | #5 | Edit plan (JSON) → your FilmCraft fork, headless over MCP: 9:16 sequence, cuts from two cameras, L1 reframe written as Motion anchor keyframes, set audio, captions, H.264 export; refuses sources FilmCraft can't decode (10-bit H.264, 4:2:2) before import | Real `filmcraft-cli` build, two synthetic cameras, noisy gappy detections: cuts on the planned frames (90/135/225), subject fully in frame 100 % of reframed frames (centre crop: 34 %), 8–14 keyframes per shot, captions burned in, audio present. Test prints SKIP without a build. Codec check (ffmpeg only): 10-bit H.264 and 4:2:2 HEVC refused, 8-bit H.264 and 10-bit 4:2:0 HEVC accepted, matching what v0.7.2 actually decoded |
 | `filmcraft_arabic_captions.jsonl` | #5 | Headless FilmCraft run: import an Arabic SRT, set an Arabic caption font, export with captions burned in | Built the fork's `filmcraft-cli` (Linux): default font gives "NO GLYPH" boxes; with Noto Sans Arabic named, joined letters in correct right-to-left order |
-| `llama-swap.example.yaml` | #2 | One exclusive GPU group: agent, small agent, the Gemma 4 12B challenger, two VLMs, Egyptian-Arabic ASR, ComfyUI; a `dj` profile | `llama-swap -validate` passes; served by a real llama-swap build in the test above |
+| `llama-swap.example.yaml` | #2 | One exclusive GPU group: agent, small agent, the Gemma 4 12B challenger, your old Ollama, two VLMs, Egyptian-Arabic ASR, ComfyUI; a `dj` profile | `llama-swap -validate` passes; served by a real llama-swap build in the test above |
 
 **Licences:** every dependency in `requirements.txt` is permissive (numpy, scipy, scikit-learn, soundfile, psutil,
 httpx: BSD; librosa: ISC; PySceneDetect: BSD-3; OpenCV: Apache-2.0; pydantic, PyYAML: MIT), so these scripts can live
 in the MIT/Apache fork. The one exception is `serato_writeback.py`: its write path imports mutagen (GPL-2.0-or-later)
 at run time. It contains no mutagen code, mutagen is not in `requirements.txt`, and its anchor half runs without it, but
-the script belongs in whatstheID (which already uses mutagen and isn't distributed): copy it there and delete it from the
-fork if you want the fork free of GPL dependencies too. serato-tools is MIT but needs mutagen as well; rb2serato's
+the script belongs in whatstheID (which already uses mutagen and isn't distributed): move it there once #10's first test
+is done and delete it from the fork. serato-tools is MIT but needs mutagen as well; rb2serato's
 `seratotags.py`, which it loads for the tag bytes, is MIT and stdlib-only.
 
 ## Setup (Windows, PowerShell, one command per line)

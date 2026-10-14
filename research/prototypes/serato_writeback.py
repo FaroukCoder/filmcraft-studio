@@ -33,7 +33,8 @@ Three gaps between "whatstheID knows the BPM" and "Serato shows the right grid":
     python serato_writeback.py compare ours.json serato.json   # anchor error vs Serato, per track
 
 Licence: imports mutagen (GPL-2.0-or-later). Fine inside whatstheID, which already depends
-on it and is not distributed; never move this into the FilmCraft fork.
+on it and is not distributed. It sits in the fork's research folder only for testing;
+move it into whatstheID afterwards.
 """
 from __future__ import annotations
 

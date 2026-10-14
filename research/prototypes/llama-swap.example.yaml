@@ -50,7 +50,9 @@ models:
     ttl: 900
 
   # The challenger in Day 4's replay (Apache-2.0, native tool calls; ~8 GB at 16K by a VRAM
-  # calculator, so expect more at 64K: lower -c if it doesn't fit). File names from
+  # calculator, unmeasured at 64K). If it doesn't fit, add -ctk q8_0 -ctv q8_0 (about half
+  # the KV cache) or take a smaller quant; never lower -c: Hermes needs at least 64K.
+  # File names from
   # ggml-org/gemma-4-12B-GGUF; the ~175 MB projector lets it read frames too. Hermes can't probe the
   # context through llama-swap and guesses from the ID ("gemma" -> 8,192, which it refuses), so set
   # model.default to this name and keep model.context_length 65536 while you test it.
@@ -60,6 +62,22 @@ models:
       -m C:/ai/models/gemma-4-12B-Q4_K_M.gguf
       -c 65536 -np 1
       # --mmproj C:/ai/models/mmproj-gemma-4-12B-f16.gguf
+    ttl: 900
+
+  # Your old Ollama setup, kept for Day 4's replay and as the fallback (Top 10 #7). In the group,
+  # DJ mode blocks it like the rest; started on its own, the guard can't stop a request loading
+  # it mid-set. Quit Ollama's tray app and its autostart first, or they hold port 11434.
+  # Its native API is at /upstream/ollama/. Routing and DJ mode tested with a stand-in on a
+  # fixed port, not with Ollama itself.
+  "ollama":
+    cmd: ollama serve
+    proxy: http://127.0.0.1:11434
+    checkEndpoint: /
+    useModelName: "qwen3-coder:30b"  # your tag, from `ollama list`
+    env:
+      # Hermes can't set num_ctx through llama-swap and Ollama's default is 4K on 12 GB;
+      # a request that sets num_ctx itself (Reel Brain should, Top 10 #4) still overrides this
+      - "OLLAMA_CONTEXT_LENGTH=65536"
     ttl: 900
 
   # Vision for Reel Brain and Creative Studio defect checks. 4-bit quants loop more, but Q8 does
@@ -113,6 +131,7 @@ profiles:
       "agent": ~
       "agent-small": ~
       "agent-gemma": ~
+      "ollama": ~
       "vlm": ~
       "vlm-glm": ~
       "asr-eg": ~
@@ -126,4 +145,4 @@ routing:
         "gpu":
           swap: true        # one member at a time
           exclusive: true   # loading a member unloads other groups too
-          members: ["agent", "agent-small", "agent-gemma", "vlm", "vlm-glm", "asr-eg", "comfyui_auto"]
+          members: ["agent", "agent-small", "agent-gemma", "ollama", "vlm", "vlm-glm", "asr-eg", "comfyui_auto"]

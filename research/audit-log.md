@@ -1334,3 +1334,31 @@ was right 25 % of the time (16 % on techno). It isn't a measurement: 1,317 of 1,
 labels are 68 % minor, so the column has lost the mode. Removed that option and noted why in the script.
 
 **Confidence changes:** none (not a Top 10 item; it's the step that decides whether key tagging ever gets turned on).
+
+## Round 61 — an independent hostile read, verified finding by finding; then your corrections (10:20–10:42 UTC)
+
+**Attack:** a fresh agent read the whole report hostilely and returned 25 findings (contradictions, overclaims,
+missing licence flags, weak links, jargon). A finding is a claim, so eight agents checked them against the report,
+the audit log, the prototypes, your repos and the web, and drafted exact edits; nothing was applied unverified.
+
+**Verdicts:** 49 real, 12 partly real, 2 wrong (the Fiverr `block.` subdomain is Fiverr's own; the MediaPipe page
+does list the legacy solutions). 105 edits applied, all cleanly; 7 rows added to section 6; 11 sources added.
+The ones that change what you'd do:
+- **The cue write-back is not unique:** Mixed In Key has auto-set Serato cues since 2015 (v7), and Lexicon generates
+  cues too. Summary and 2.4 no longer sell it as an edge; it's for your own prep.
+- **Ollama sat outside the GPU guard in week 1** (the guard's `--stop` runs once). The YAML now has Ollama as a
+  llama-swap entry so DJ mode unloads it too; tested with the real llama-swap (validate + routing).
+- **Hermes' 64K floor:** the challengers' VRAM and speed figures were quoted at 16K / up to 8K. Now marked, the YAML's
+  "lower -c" advice removed (Hermes would refuse the model), and a section 6 row added.
+- **"Resolve costs a day"** is now "a few days": OTIO carries the cuts exactly, but reframe keyframes and captions
+  must be redone.
+- **Licences:** ComfyUI (GPL-3.0, HTTP API only), GSAP's own licence beside HyperFrames, HiGHS (MIT) and cvxpy
+  (Apache-2.0) corrected, the FLUX click-through gate explained.
+- **Money:** paths reordered as "easiest test first" with the paying paths scheduled, and Egypt payout stated per path.
+
+**Your corrections (after the hand-back message):** you replaced Laya with an EmbeddingGemma router and found it better,
+and the Qwen-Image licence doesn't matter while you're testing. Top 10 #3 is now "prove the new router on 200 routes"
+(one evening; Laya's fine-tuning plan dropped), #1 is marked parked until paid work, and every Laya reference was
+updated (summary, Day 1, 2.2, router table, section 6).
+
+**Confidence changes:** #3 high (an evening's check); #1 unchanged but parked by you.
