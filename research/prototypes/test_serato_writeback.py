@@ -10,7 +10,10 @@ Write (needs ffmpeg, mutagen and RB2SERATO_TAGS = path to rb2serato's seratotags
 into MP3, FLAC and WAV copies; the audio bytes must be unchanged, our decoder must read back
 what was written, and serato-tools (an independent parser, if installed) must agree for MP3
 and FLAC. A mutation that touches the audio must be rejected with the original untouched,
-and implausible numbers must be refused before anything is written.
+and implausible numbers must be refused before anything is written. Your own Serato work
+must survive a write: hand-set cues keep their slots, loops, colour, BPM lock and (for a
+cues-only write) the grid are kept, a new cue next to one of yours is skipped, and a tag
+holding data this can't re-encode (a Flip entry) is refused rather than rewritten.
 
     RB2SERATO_TAGS=/path/to/rb2serato/src/rb2serato/seratotags.py python test_serato_writeback.py
 """
@@ -162,12 +165,59 @@ def write_checks(problems: list, st_path: str) -> dict:
         if f.read_bytes() != orig or list(d.glob("*.serato-tmp*")):
             problems.append("original changed or temp file left behind after a refused write")
 
-        # an MP3 offset moves grid and cues by the same amount
-        f = d / "track.mp3"
+        # an MP3 offset moves grid and cues by the same amount (fresh file: on the first one the
+        # shifted cues would land within 250 ms of the existing ones and be skipped, by design)
+        f = d / "offset.mp3"
+        shutil.copy2(d / "src.wav", d / "offset.wav")
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(d / "offset.wav"), "-c:a", "libmp3lame",
+                        "-b:a", "192k", str(f)], check=True)
         sw.write(str(f), st, bpm, anchor, cues, offset_ms=26.0)
         back = sw.read(str(f), st)
         if abs(back["grid"][0]["position_s"] - (anchor + 0.026)) > 1e-5 or back["cues"][1]["ms"] != 58416:
             problems.append(f"offset not applied: {back}")
+
+        # your own Serato work survives: cues stay in their slots, loops, colour, lock and grid stay
+        for ext in (".flac", ".mp3"):
+            f = d / f"mine{ext}"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(d / "src.wav"), str(f)], check=True)
+            mine = st.SeratoMarkers(
+                cues=[st.SeratoCue(0, 1000, st.CUE_PALETTE[5], "mine A"), st.SeratoCue(3, 20000, st.CUE_PALETTE[9], "mine B")],
+                loops=[st.SeratoLoop(0, 4000, 8000, "my loop")], track_color=(0x99, 0x00, 0xCC), bpm_locked=True)
+            pre = {"Serato BeatGrid": st.encode_beatgrid([st.BeatGridMarker(0.5, 0, 131.0)]),
+                   "Serato Markers2": st.encode_markers2_id3(mine), "Serato Markers_": st.encode_markers_id3(mine)}
+            if ext == ".flac":
+                pre.pop("Serato Markers_")
+            sw._tag_file(str(f), pre)
+            res = sw.write(str(f), st, None, None, [{"time": 1.1, "label": "drop"}, {"time": 30.0, "label": "intro end"},
+                                                     {"time": 60.0, "label": "outro"}], grid=False)
+            back = sw.read(str(f), st)
+            want = [(0, 1000, "mine A"), (1, 30000, "intro end"), (2, 60000, "outro"), (3, 20000, "mine B")]
+            if [(c["slot"], c["ms"], c["name"]) for c in back["cues"]] != want:
+                problems.append(f"{ext} merge: cues {back['cues']}")
+            if len(res["cues_skipped"]) != 1 or back["loops"] != [{"slot": 0, "start_ms": 4000, "end_ms": 8000}]:
+                problems.append(f"{ext} merge: skipped {res['cues_skipped']}, loops {back['loops']}")
+            if back["track_color"] != [0x99, 0x00, 0xCC] or not back["bpm_locked"]:
+                problems.append(f"{ext} merge: colour/lock lost {back}")
+            if abs(back["grid"][0]["bpm"] - 131.0) > 1e-4 or abs(back["grid"][0]["position_s"] - 0.5) > 1e-6:
+                problems.append(f"{ext} cues-only write touched the grid: {back['grid']}")
+            out[f"merge{ext}"] = {"cues": back["cues"], "skipped": res["cues_skipped"]}
+
+        # Serato data this can't re-encode (a Flip entry) is never rewritten
+        def entry(name: bytes, data: bytes) -> bytes:
+            return name + b"\x00" + len(data).to_bytes(4, "big") + data
+        inner = b"\x01\x01" + entry(b"COLOR", b"\x00\xff\xff\xff") + entry(b"FLIP", b"\x00" * 12) + b"\x00"
+        flip = b"\x01\x01" + sw.base64.b64encode(inner).rstrip(b"=") + b"\x00" * 8
+        f = d / "flip.mp3"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(d / "src.wav"), str(f)], check=True)
+        sw._tag_file(str(f), {"Serato Markers2": flip})
+        before = f.read_bytes()
+        try:
+            sw.write(str(f), st, None, None, [{"time": 30.0, "label": "x"}], grid=False)
+            problems.append("a Markers2 tag with a FLIP entry was rewritten")
+        except sw.WriteError as e:
+            out["flip_refused"] = str(e)
+        if f.read_bytes() != before:
+            problems.append("refused write still changed the file")
 
         for bad in ((float("nan"), 0.2), (0.0, 0.2), (1000.0, 0.2), (132.0, -1.0), (132.0, float("inf"))):
             try:

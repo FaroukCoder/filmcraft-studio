@@ -952,3 +952,30 @@ this round checked them against the tools' own code.
   Windows pitfalls table: install with `install.ps1`.
 
 **Confidence changes:** none; Day 1 and Day 4 move from "checked against docs" to "checked against code".
+
+## Round 41 — own bias, second pass: does the Top 10 rank what I could build? (05:17–05:21 UTC)
+
+**Attack:** 8 of the 10 items now have a prototype of mine behind them. Checked each rank against impact ÷ effort as
+if no prototype existed, and checked every block against the brief's six fields.
+
+- **Missing fields:** #2, #6, #9 and #10 had no "Could fail if". Added (process-name miss and GPU jobs started outside
+  llama-swap; medians over mixed styles and aggregator re-edits; body detection failing in strobes and B2B sets;
+  Serato caching, FLAC layout, per-encoder MP3 offsets). All ten blocks now have why, project, effort, confidence
+  with a reason, failure mode and first step (checked by script).
+- **Ranks that rose because I tested them:** two, both in round 24. The GPU guard (6 → 2) would rank there untested:
+  it enforces a "never" in your brief. The FilmCraft seam (new #5) rose partly because the test shrank its effort,
+  which is a legitimate impact ÷ effort change; kept, noted here.
+- **The real bias was inside #10.** It was framed around *grids* because grid encoding is the hard, testable part.
+  But Serato analyses a grid on import and whatstheID's tempo already matches Serato's to 0.01 BPM, so rewriting
+  grids mostly duplicates Serato. The value is cue points Serato never sets (intro end, drop, outro, which
+  `analyze.py` already finds) and grids only where Serato is wrong (your notes have one). Reframed #10 that way.
+- **And a hazard the reframing exposed:** cue points live in `Serato Markers2` together with your hand-set cues,
+  loops, track colour and BPM lock; my writer replaced the whole tag, so "write cues everywhere" would have wiped
+  your prep. `serato_writeback.py` now merges: your cues keep their slots, new ones fill free slots, a new cue
+  within 250 ms of yours is skipped, loops/colour/lock are kept, `--cues-only` leaves the grid alone, and a tag
+  holding entry types it can't re-encode (Serato Flip) is refused untouched. Tested on MP3 and FLAC.
+- **Checked, not promoted:** vault security (cross-project 8) as a Top 10 candidate. Hermes' defaults already deny
+  unknown gateway users and run `smart` approvals with cron/unattended denial (read in its code), so the rule is
+  "don't loosen them"; reworded there instead. Track-ID captions folded into #8 (they come free with the history).
+
+**Confidence changes:** none; #10's title and first step changed.

@@ -27,6 +27,7 @@ Three gaps between "whatstheID knows the BPM" and "Serato shows the right grid":
    offset. Calibrate MP3s separately with `compare` and pass `--offset-ms`.
 
     python serato_writeback.py anchor track.flac --bpm 132.0
+    python serato_writeback.py write track.flac --rb2serato seratotags.py --cues-only --cue "drop=95.31"
     python serato_writeback.py write track.flac --rb2serato seratotags.py --bpm 132.0 --anchor 0.214 --cue "drop=95.31"
     python serato_writeback.py read track.flac --rb2serato seratotags.py
     python serato_writeback.py compare ours.json serato.json   # anchor error vs Serato, per track
@@ -210,27 +211,77 @@ def load_seratotags(path: str):
     return mod
 
 
-def payloads(st, bpm: float, anchor_s: float, cues: list[dict] | None = None, lock: bool = False) -> dict:
-    """{'Serato BeatGrid': bytes, 'Serato Markers2': bytes, 'Serato Markers_': bytes}.
-    cues: [{"time": s, "label": str}] in seconds, at most 8 (Serato's hot-cue slots).
+KNOWN_MARKERS2 = {"COLOR", "CUE", "LOOP", "BPMLOCK"}
 
-    Refuses anything Serato would choke on rather than writing it."""
-    if not (isinstance(bpm, (int, float)) and math.isfinite(bpm) and 40 <= bpm <= 300):
-        raise ValueError(f"implausible BPM {bpm!r}")
-    if not (isinstance(anchor_s, (int, float)) and math.isfinite(anchor_s) and anchor_s >= 0):
-        raise ValueError(f"bad anchor {anchor_s!r}")
-    grid = [st.BeatGridMarker(position_sec=float(anchor_s), bpm=float(bpm))]
-    slots = []
-    for i, c in enumerate((cues or [])[:8]):
+
+def markers2_entry_names(raw: bytes) -> list[str]:
+    """Entry types inside a Serato Markers2 payload (01 01 + base64 of 01 01 + entries)."""
+    body = bytes(raw)[2:].split(b"\x00", 1)[0].replace(b"\n", b"")
+    body += b"=" * (-len(body) % 4) if len(body) % 4 != 1 else b"A=="
+    inner = base64.b64decode(body)[2:]
+    names, off = [], 0
+    for _ in range(256):
+        end = inner.find(b"\x00", off)
+        if end <= off:
+            break
+        name = inner[off:end].decode("ascii", "replace")
+        if end + 5 > len(inner):
+            break
+        size = struct.unpack(">I", inner[end + 1:end + 5])[0]
+        names.append(name)
+        off = end + 5 + size
+    return names
+
+
+def merge_cues(st, existing, cues: list[dict] | None, near_ms: int = 250):
+    """Your cues and loops stay where they are; new cues go into free slots (0-7), and a new
+    cue within `near_ms` of one you already set is skipped. Returns (cues, added, skipped)."""
+    kept = list(existing.cues) if existing else []
+    used = {c.index for c in kept}
+    added, skipped = [], []
+    for c in cues or []:
         t = float(c["time"])
         if not (math.isfinite(t) and t >= 0):
             raise ValueError(f"bad cue time {c!r}")
-        slots.append(st.SeratoCue(index=i, position_ms=int(round(t * 1000)),
-                                  color=st.DEFAULT_SLOT_COLORS[i], name=str(c.get("label", ""))[:40]))
-    m = st.SeratoMarkers(cues=slots, loops=[], bpm_locked=lock)
-    return {"Serato BeatGrid": st.encode_beatgrid(grid),
-            "Serato Markers2": st.encode_markers2_id3(m),
-            "Serato Markers_": st.encode_markers_id3(m)}
+        ms = int(round(t * 1000))
+        if any(abs(k.position_ms - ms) <= near_ms for k in kept):
+            skipped.append({**c, "why": "you already have a cue there"})
+            continue
+        free = next((i for i in range(8) if i not in used), None)
+        if free is None:
+            skipped.append({**c, "why": "all 8 slots are taken"})
+            continue
+        cue = st.SeratoCue(index=free, position_ms=ms, color=st.DEFAULT_SLOT_COLORS[free],
+                           name=str(c.get("label", ""))[:40])
+        kept.append(cue)
+        used.add(free)
+        added.append({"slot": free, "ms": ms, "name": cue.name})
+    return sorted(kept, key=lambda c: c.index), added, skipped
+
+
+def payloads(st, bpm: float | None, anchor_s: float | None, cues: list[dict] | None = None,
+             lock: bool = False, existing=None, grid: bool = True) -> dict:
+    """{'Serato Markers2': bytes, 'Serato Markers_': bytes, ['Serato BeatGrid': bytes],
+    '_added': [...], '_skipped': [...]}. cues: [{"time": s, "label": str}] in seconds.
+    `existing` is the file's current SeratoMarkers: its cues, loops, colour and lock are kept.
+    grid=False writes cues only and leaves the file's grid alone.
+
+    Refuses anything Serato would choke on rather than writing it."""
+    out = {}
+    if grid:
+        if not (isinstance(bpm, (int, float)) and math.isfinite(bpm) and 40 <= bpm <= 300):
+            raise ValueError(f"implausible BPM {bpm!r}")
+        if not (isinstance(anchor_s, (int, float)) and math.isfinite(anchor_s) and anchor_s >= 0):
+            raise ValueError(f"bad anchor {anchor_s!r}")
+        out["Serato BeatGrid"] = st.encode_beatgrid([st.BeatGridMarker(position_sec=float(anchor_s), bpm=float(bpm))])
+    merged, added, skipped = merge_cues(st, existing, cues)
+    m = st.SeratoMarkers(cues=merged, loops=list(existing.loops) if existing else [],
+                         track_color=existing.track_color if existing else st.NO_TRACK_COLOR,
+                         bpm_locked=lock if grid else bool(existing and existing.bpm_locked))
+    out["Serato Markers2"] = st.encode_markers2_id3(m)
+    out["Serato Markers_"] = st.encode_markers_id3(m)
+    out["_added"], out["_skipped"] = added, skipped
+    return out
 
 
 def flac_value(name: str, payload: bytes) -> str:
@@ -360,26 +411,8 @@ def safe_write(path: str | Path, mutate, backup_dir: str | Path | None = None) -
     return {"path": str(p), "audio_sha256": before}
 
 
-def write(path: str, st, bpm: float, anchor_s: float, cues=None, lock: bool = False, backup_dir=None,
-          offset_ms: float = 0.0) -> dict:
-    """offset_ms shifts the grid and cues onto Serato's timeline. It is 0 for FLAC and WAV;
-    for MP3, Serato and FFmpeg/libmad decoders disagree by roughly 24-26 ms (Mixxx applies
-    -26 ms at 44.1 kHz and -24 ms at 48 kHz when importing Serato cues, and other values
-    under Core Audio), so measure yours with `compare` on MP3s Serato analysed."""
-    if offset_ms:
-        anchor_s = anchor_s + offset_ms / 1000.0
-        beat = 60.0 / bpm if bpm and bpm > 0 else 0
-        if beat and anchor_s < 0:
-            anchor_s += math.ceil(-anchor_s / beat) * beat
-        cues = [{**c, "time": max(0.0, float(c["time"]) + offset_ms / 1000.0)} for c in (cues or [])]
-    tags = payloads(st, bpm, anchor_s, cues, lock)
-    if Path(path).suffix.lower() == ".flac":
-        tags.pop("Serato Markers_")  # no FLAC field for it in the format notes
-    return safe_write(path, lambda t: _tag_file(t, tags), backup_dir)
-
-
-def read(path: str, st) -> dict:
-    """Decode what is in the file now with rb2serato's decoders (for checking a write)."""
+def raw_tags(path: str) -> dict:
+    """{'Serato BeatGrid': bytes, 'Serato Markers2': bytes, ...} as stored in the file now."""
     ext = Path(path).suffix.lower()
     raw = {}
     if ext == ".flac":
@@ -395,6 +428,48 @@ def read(path: str, st) -> dict:
         f = File(path)
         for fr in (f.tags.getall("GEOB") if f is not None and f.tags is not None else []):
             raw[fr.desc] = bytes(fr.data)
+    return raw
+
+
+def write(path: str, st, bpm: float | None, anchor_s: float | None, cues=None, lock: bool = False,
+          backup_dir=None, offset_ms: float = 0.0, grid: bool = True) -> dict:
+    """Add cues (and, with grid=True, a grid) without losing what you set in Serato.
+
+    Your existing cues, loops, track colour and BPM lock are kept; new cues fill free slots.
+    A Markers2 tag holding entry types this can't re-encode (e.g. Flip) is refused, because
+    rewriting it would drop them. offset_ms shifts the grid and cues onto Serato's timeline:
+    0 for FLAC and WAV; for MP3, Serato and FFmpeg/libmad decoders disagree by roughly 24-26
+    ms (Mixxx applies -26 ms at 44.1 kHz and -24 ms at 48 kHz when importing Serato cues, and
+    other values under Core Audio), so measure yours with `compare` on MP3s Serato analysed."""
+    if offset_ms:
+        if grid and anchor_s is not None:
+            anchor_s = anchor_s + offset_ms / 1000.0
+            beat = 60.0 / bpm if bpm and bpm > 0 else 0
+            if beat and anchor_s < 0:
+                anchor_s += math.ceil(-anchor_s / beat) * beat
+        cues = [{**c, "time": max(0.0, float(c["time"]) + offset_ms / 1000.0)} for c in (cues or [])]
+    existing = None
+    raw = raw_tags(path).get("Serato Markers2")
+    if raw:
+        try:
+            names = markers2_entry_names(raw)
+            existing = st.decode_markers2(raw)
+        except Exception as e:  # noqa: BLE001 - an unreadable tag is never overwritten blind
+            raise WriteError(f"can't read the existing Serato cues in {Path(path).name}; not touching it") from e
+        unknown = sorted(set(names) - KNOWN_MARKERS2)
+        if unknown:
+            raise WriteError(f"{Path(path).name} has Serato data this can't keep ({', '.join(unknown)}); not touching it")
+    tags = payloads(st, bpm, anchor_s, cues, lock, existing=existing, grid=grid)
+    added, skipped = tags.pop("_added"), tags.pop("_skipped")
+    if Path(path).suffix.lower() == ".flac":
+        tags.pop("Serato Markers_")  # no FLAC field for it in the format notes
+    res = safe_write(path, lambda t: _tag_file(t, tags), backup_dir)
+    return {**res, "cues_added": added, "cues_skipped": skipped, "grid_written": grid}
+
+
+def read(path: str, st) -> dict:
+    """Decode what is in the file now with rb2serato's decoders (for checking a write)."""
+    raw = raw_tags(path)
     out = {}
     if "Serato BeatGrid" in raw:
         g = st.decode_beatgrid(raw["Serato BeatGrid"])
@@ -402,6 +477,8 @@ def read(path: str, st) -> dict:
     if "Serato Markers2" in raw:
         m = st.decode_markers2(raw["Serato Markers2"])
         out["cues"] = [{"slot": c.index, "ms": c.position_ms, "name": c.name} for c in m.cues]
+        out["loops"] = [{"slot": lp.index, "start_ms": lp.start_ms, "end_ms": lp.end_ms} for lp in m.loops]
+        out["track_color"] = list(m.track_color)
         out["bpm_locked"] = m.bpm_locked
     return out
 
@@ -438,8 +515,9 @@ def main(argv=None) -> int:
     w = sub.add_parser("write")
     w.add_argument("audio")
     w.add_argument("--rb2serato", required=True, help="path to rb2serato's seratotags.py")
-    w.add_argument("--bpm", type=float, required=True)
-    w.add_argument("--anchor", type=float, required=True)
+    w.add_argument("--bpm", type=float)
+    w.add_argument("--anchor", type=float)
+    w.add_argument("--cues-only", action="store_true", help="add cues, leave the file's grid alone")
     w.add_argument("--cue", action="append", default=[], help="label=seconds")
     w.add_argument("--lock", action="store_true")
     w.add_argument("--backup-dir")
@@ -458,8 +536,10 @@ def main(argv=None) -> int:
         print(json.dumps(grid_anchor(y, sr, args.bpm, beat_one=args.beat_one)))
     elif args.cmd == "write":
         cues = [{"label": s.split("=", 1)[0], "time": float(s.split("=", 1)[1])} for s in args.cue]
+        if not args.cues_only and (args.bpm is None or args.anchor is None):
+            ap.error("--bpm and --anchor are required unless --cues-only")
         print(json.dumps(write(args.audio, load_seratotags(args.rb2serato), args.bpm, args.anchor, cues,
-                               args.lock, args.backup_dir, args.offset_ms)))
+                               args.lock, args.backup_dir, args.offset_ms, grid=not args.cues_only)))
     elif args.cmd == "read":
         print(json.dumps(read(args.audio, load_seratotags(args.rb2serato)), indent=2))
     else:
