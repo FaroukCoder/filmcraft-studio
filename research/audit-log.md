@@ -1161,3 +1161,14 @@ false`, `providers.llamacpp.{base_url,model}`, `model.{provider,default,context_
   unrecognised and the probe ignored it. Not recommended.
 
 **Confidence changes:** #7 stays medium, but a silent failure in its exact setup is now caught before you hit it.
+
+## Round 51 — how big is Hermes' fixed prompt? (05:57–05:58 UTC)
+
+**Attack:** #7 says the fixed prompt "dominates the first turn" and should be shrunk, with no number. Ran
+`hermes prompt-size --json` on the same throwaway install, from an empty folder (so no AGENTS.md is picked up): a
+6,832-byte system prompt plus 46,875 bytes of tool-schema JSON for 22 default tools, roughly 13–15k tokens at 3.5–4
+bytes a token, before any MCP server and with no skills synced yet. Every llama-swap swap re-processes that, and with
+experts on the CPU prompt processing is the slow part. Added to #7; per-route profiles (2.2) are where it pays off.
+The pp speed on your card is not known: the llama-server log's prompt-eval tok/s gives it on Day 3.
+
+**Confidence changes:** none.
