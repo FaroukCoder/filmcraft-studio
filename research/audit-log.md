@@ -1235,3 +1235,23 @@ likely footage (phone clips from the booth) is 10-bit HDR HEVC by default on man
 - These are Linux results; G3 says Windows Media Foundation declines the same formats, so they should hold there.
 
 **Confidence changes:** #5 stays high for the mechanics; its failure mode is now specific and guarded.
+
+## Round 56 — overlays with alpha, tested instead of read (06:09–06:13 UTC)
+
+**Attack:** 2.1 told you to export HyperFrames overlays as ProRes 4444, "not WebM", because "FilmCraft's Matroska
+reader skips BlockAdditions, where VP9 alpha lives". That came from reading code, not running it.
+
+**Test:** a 1280×720 overlay with an opaque white box and a transparent surround (alpha checked with ffmpeg's
+`alphaextract`: 255 inside, 0 outside), as ProRes 4444 (`yuva444p10le`) and as VP9 WebM with alpha, on V2 over a blue
+background on V1, exported as H.264, through **both** your fork's base build and v0.7.2. All four exports: blue
+outside, white inside, clean edge. FilmCraft has read WebM alpha since upstream #402 (`crates/codecs/src/webm_alpha.rs`
+in your fork). **My claim was wrong**; 2.1 now says either format works, and section 5's Arabic item (the same
+"read instead of tested" mistake) now names this one too.
+
+**Process note:** my first fixture used `drawbox`, which doesn't write the alpha plane, so both overlays were fully
+transparent and the first run looked like "neither works". Checking the fixture's alpha first caught it.
+
+**Also queued (not done here):** a suggested task for your fork: make headless exports fail or warn when a clip's
+media can't be decoded (round 55's silent MEDIA UNREADABLE card).
+
+**Confidence changes:** none.
