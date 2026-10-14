@@ -1,4 +1,4 @@
-"""Get valid, bounded JSON out of a local vision model for one reel (Top 10 #3).
+"""Get valid, bounded JSON out of a local vision model for one reel (Top 10 #4).
 
 What it does, in the order the evidence suggests:
 1. Downscales frames to <= 640 px on the long side and caps their number, then

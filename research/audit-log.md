@@ -610,3 +610,23 @@ the primary text instead; the search index quotes the official pages.
   products) appear only in secondary sources; the uncertainty row now names exactly that.
 
 **Confidence changes:** Top 10 #1 medium → high.
+
+## Round 24 — re-rank the Top 10 (03:53–03:57 UTC)
+
+**Attack:** the brief's rule: a low-confidence top-10 item gets verified or demoted. #8 (house look per client) had
+been low since round 2 and can't be verified without you. Meanwhile two items gained tested evidence.
+
+**Changes (old → new number):** 1 → 1; GPU sharing 6 → **2** (it enforces a hard constraint of yours and is now tested
+against the real binary); Laya 2 → 3; VLM JSON 3 → 4; **new #5: wire the planner to the fork headless and build it
+with craft-fonts** (the tested seam from round 18, 1 day, high for the mechanics); reference clips 5 → 6; Hermes on
+llama.cpp 4 → 7; set grids 7 → 8; reframe 9 → 9; Serato write-back 10 → 10. **House look demoted** to a paragraph in
+2.1 (content kept; still low confidence). The Arabic-caption finding moved into #5. Every "Top 10 #N" reference in
+the report, the first-week plan and the prototypes (README table, docstrings, YAML) was renumbered; the old numbers
+in earlier audit-log entries are left as written.
+
+**Also fixed:** the report's status line still said "round 1 draft"; the blunt version now says what's tested (the
+FilmCraft seam, the GPU guard). Day 5 gains the fork build; it uses a git worktree, because checking out the v0.7.2
+tag would hide `research/` (it only exists on this branch).
+
+**Open:** the seam was tested on the fork's own base (0.6.0 lineage), not on v0.7.2, which the report tells you to
+sync to. A v0.7.2 build is running to re-test it.

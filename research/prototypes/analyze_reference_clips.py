@@ -1,4 +1,4 @@
-"""Measure how reference club clips are cut (Top 10 #5).
+"""Measure how reference club clips are cut (Top 10 #6).
 
 For every video in a folder: find the cuts, track the beats, and report where the
 cuts land relative to beats, bars and 8/16-bar phrases, how long shots last in

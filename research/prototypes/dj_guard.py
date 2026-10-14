@@ -1,4 +1,4 @@
-"""Keep the GPU quiet while you DJ or produce (Top 10 #6).
+"""Keep the GPU quiet while you DJ or produce (Top 10 #2).
 
 Polls for Serato or Ableton. When one starts: switches llama-swap to a "dj" profile that
 answers every model with 404 (PUT /api/profiles/active), unloads everything

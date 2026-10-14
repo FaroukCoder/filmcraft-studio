@@ -1,4 +1,4 @@
-"""Beat grid for your own DJ set from Serato's history and your own track files (Top 10 #7).
+"""Beat grid for your own DJ set from Serato's history and your own track files (Top 10 #8).
 
 Step 1, `history`: read Serato DJ 4's `master.sqlite` (read-only) and list what you
 played in a session: artist, title, BPM, key, deck, start time, and where each load

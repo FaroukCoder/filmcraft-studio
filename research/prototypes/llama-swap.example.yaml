@@ -1,5 +1,5 @@
 # llama-swap config for one 12 GB GPU shared by Hermes, Reel Brain, Creative Studio and
-# ComfyUI (Top 10 #6). Only one member of the "gpu" group runs at a time; asking for
+# ComfyUI (Top 10 #2). Only one member of the "gpu" group runs at a time; asking for
 # another unloads the current one first.
 #
 # Install (community-maintained WinGet package):  winget install llama-swap
