@@ -48,22 +48,24 @@ models:
       -c 65536
     ttl: 900
 
-  # Vision for Reel Brain and Creative Studio defect checks. Q8 loops less than Q4.
+  # Vision for Reel Brain and Creative Studio defect checks. 4-bit quants loop more, but Q8 does
+  # not fit: Q8_0 ~8.7 GB + projector ~1.2 GB + KV ~2.4 GB at 16K (36 layers x 8 KV heads x 128)
+  # is over 12 GB. Q6_K at 8K context is ~9 GB; 8 frames at 360x640 are ~2K tokens.
   "vlm":
     cmd: |
       ${llama}
-      -m C:/ai/models/Qwen3-VL-8B-Instruct-Q8_0.gguf
+      -m C:/ai/models/Qwen3-VL-8B-Instruct-Q6_K.gguf
       --mmproj C:/ai/models/mmproj-Qwen3-VL-8B-Instruct-F16.gguf
-      -c 16384
+      -c 8192 -np 1
     ttl: 300
 
-  # A/B candidate: one benchmark author saw zero loops in 500 cases.
+  # A/B candidate: one benchmark author saw zero loops in 500 cases. ~9B: Q6_K, not Q8.
   "vlm-glm":
     cmd: |
       ${llama}
-      -m C:/ai/models/GLM-4.6V-Flash-Q8_0.gguf
+      -m C:/ai/models/GLM-4.6V-Flash-Q6_K.gguf
       --mmproj C:/ai/models/mmproj-GLM-4.6V-Flash-F16.gguf
-      -c 16384
+      -c 8192 -np 1
     ttl: 300
 
   # Egyptian Arabic / code-switched speech: QwenCleo-ASR's own FastAPI server, which has an

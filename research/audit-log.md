@@ -763,3 +763,21 @@ bank accounts to Global Payouts, which makes it plausible but not confirmed for 
 
 **Change:** path 3 now says Fiverr is the verified route and Contra needs a test withdrawal first; added a row to
 "Still uncertain". **Kills:** none. **Confidence changes:** path 3 stays low (demand evidence is still thin).
+
+## Round 33 — contradictions, second pass: the VLM that wouldn't fit (04:20–04:22 UTC)
+
+**Attack:** read the new material against the old, looking for advice that disagrees with itself.
+
+**What broke**
+- **Day 2 used Ollama's `qwen3-vl:8b`, which by its 6.1 GB size is a 4-bit build**, while Top 10 #4 says 4-bit
+  quants loop more. Day 2 now says so on purpose (change one thing at a time) and Day 3 brings the higher quant in.
+- **The higher quant I recommended doesn't fit.** Arithmetic I hadn't done: Qwen3-VL-8B at Q8_0 (~8.7 GB) +
+  projector (~1.2 GB) + KV cache at 16K context (~2.4 GB: 36 layers × 8 KV heads × 128 dims × 2 × 2 bytes per token)
+  is over 12 GB, and the example config gave the `vlm` entry exactly 16K at Q8. Now Q6_K at 8K context (~9 GB; 8
+  downscaled frames are ~2K tokens) for both VLM entries; `llama-swap -validate` still passes. Top 10 #4 and the
+  download-size table (now ≈ 90–100 GB) updated.
+
+**Checked and consistent:** RAM/offload advice across Top 10 #7, the 2.2 models table and the YAML; the shared-VLM
+piece; caption timing vs money path 2; Hermes' 64K floor vs the agent's `-c 65536`.
+
+**Confidence changes:** none, but Top 10 #4 would have produced an out-of-memory error on its first Q8 try.
