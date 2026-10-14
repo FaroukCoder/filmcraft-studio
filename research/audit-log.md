@@ -596,3 +596,17 @@ near-ties returned as "ambiguous".
 now measures it on the same 50 reels as the blind re-label).
 
 **Confidence changes:** Reel Brain repo linking stays medium (logic tested, real-data precision unknown).
+
+## Round 23 — the two licence claims nobody had read at the source (03:52–03:55 UTC)
+
+**Attack:** Top 10 #1 rested on secondary write-ups because Hugging Face is blocked from my fetch tool. Searched for
+the primary text instead; the search index quotes the official pages.
+- **Qwen-Image 2.1:** the official model card says "This model is licensed under the Qwen Research License
+  Agreement"; the LICENSE file says "FOR NON-COMMERCIAL PURPOSES ONLY", with commercial licences by request to Qwen.
+  The 2.1-Turbo and prompt-rewriter (PE-T2I / PE-I2I) checkpoints carry the same licence. Top 10 #1: medium → **high**;
+  its first step no longer needs you to read the card. Removed from "Still uncertain".
+- **MiniMax H3:** model cards confirm the territory clause (worldwide except the EU, UK, South Korea and the US), so
+  Egypt is inside it. The commercial terms (a US$20 M revenue cap, a duty to show "MiniMax H3" in commercial
+  products) appear only in secondary sources; the uncertainty row now names exactly that.
+
+**Confidence changes:** Top 10 #1 medium → high.
