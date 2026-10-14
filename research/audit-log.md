@@ -647,3 +647,26 @@ sync to. A v0.7.2 build is running to re-test it.
   if any `$ref`/`$defs` remains and checks the enum and `maxItems` survive. Report updated.
 
 **Confidence changes:** Top 10 #4 unchanged (medium), but one of its four fixes would have silently done nothing.
+
+## Round 26 — shot picking built, v0.7.2 re-tested, Gemini in Egypt (03:59–04:07 UTC)
+
+**Shot picking (one of your open problems) was a proposal; now a tested prototype.** `shot_picker.py` scores each
+synced angle per bar (sharpness, exposure, motion, strobe flashes; pose/taste scores pluggable) and chooses an angle
+per bar by dynamic programming: cuts only on bar lines, minimum shot length, crowd on the drop bar and the next, and
+a plan JSON for `plan_to_filmcraft.py`. Its test (two synthetic, offset angles at 150 BPM, one dark for 4 bars, one
+out of focus for 6) passes.
+- **What the test caught, twice:** with no maximum shot length the cut cost produced two 6- and 12-bar shots (not
+  how club clips are cut); with a *hard* 4-bar maximum it cut to the out-of-focus angle just to obey the rule. The
+  maximum is now a per-bar cost (shots run long only while the other angle is unusable); with equal scores it falls
+  into 4-bar shots, i.e. cuts on phrase lines. The first test assertion was also wrong (it flagged a long shot that
+  was covering the dark stretch); it now checks whether the other angle was usable for the extra bars.
+
+**v0.7.2:** built upstream's tag with craft-fonts (8.5 min) and re-ran `test_plan_to_filmcraft.py` and the Arabic
+caption script against it: identical results, Arabic renders with the default font. The advice to sync to v0.7.2
+no longer rests on an assumption that the seam survives the upgrade.
+
+**Gemini:** Egypt is on Google's official list of regions for the Gemini API and AI Studio. The Reel Brain
+steelman's "unconfirmed availability" is settled; free-tier video limits remain unchecked.
+
+**Confidence changes:** Top 10 #5 (seam) now tested on both builds; shot picking from "proposal" to "prototype,
+tested on synthetic footage" (medium: real club footage untested).
