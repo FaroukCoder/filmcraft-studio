@@ -1216,3 +1216,22 @@ run, except the Windows-only ones (`Get-CimInstance`, `nvidia-smi -lgc`, PowerSh
 standard.
 
 **Confidence changes:** none.
+
+## Round 55 — what your footage has to be for FilmCraft (06:03–06:09 UTC)
+
+**Attack:** #5's "10-bit 4:2:2 won't decode on Windows" came from FilmCraft's gap list, not a test, and the most
+likely footage (phone clips from the booth) is 10-bit HDR HEVC by default on many phones.
+
+**Tested on the v0.7.2 build** with five generated 2 s clips through import → place → export:
+- H.264 8-bit 4:2:0: fine (mean frame difference 8.3, compression).
+- **HEVC Main 10 4:2:0 tagged HLG/BT.2020 (phone HDR): decodes**; colours come out converted differently from
+  ffmpeg's naive view, so check one real clip by eye.
+- H.264 High 10, HEVC 4:2:2 10-bit, H.264 4:2:2 10-bit: **the export contains a red "MEDIA UNREADABLE" card**
+  instead of the picture (looked at the frame). `file.import` reports no error and `media.status` says "online", and
+  `filmcraft-cli probe` names the codec without flagging it, so an unattended pipeline would deliver the card.
+- `plan_to_filmcraft.py` now ffprobes every source first and refuses those with the exact ffmpeg command to make an
+  8-bit 4:2:0 copy; test (ffmpeg only, runs without a FilmCraft build) covers both refusals and both acceptances.
+  `test_plan_to_filmcraft.py` and `test_pipeline_e2e.py` still pass against v0.7.2.
+- These are Linux results; G3 says Windows Media Foundation declines the same formats, so they should hold there.
+
+**Confidence changes:** #5 stays high for the mechanics; its failure mode is now specific and guarded.

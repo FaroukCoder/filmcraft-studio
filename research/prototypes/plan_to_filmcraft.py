@@ -109,6 +109,29 @@ def probe_size(cli: str, path: str) -> tuple[int, int]:
     return int(v["width"]), int(v["height"])
 
 
+# What FilmCraft v0.7.2 decodes without hardware (its docs/gaps.md G3, and tested here): H.264
+# only as 8-bit 4:2:0, HEVC only as 4:2:0 (8- or 10-bit). Anything else imports as "online",
+# media.status says "online", and the export silently contains a red MEDIA UNREADABLE card.
+FILMCRAFT_OK = {"h264": {"yuv420p", "yuvj420p"}, "hevc": {"yuv420p", "yuvj420p", "yuv420p10le"}}
+
+
+def check_decodable(path: str) -> str | None:
+    """None if FilmCraft can decode the file's video, else why not and the ffmpeg fix."""
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                              "stream=codec_name,pix_fmt,profile", "-of", "json", path],
+                             capture_output=True, text=True, check=True).stdout
+        st = (json.loads(out).get("streams") or [{}])[0]
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        return None  # can't tell without ffprobe; FilmCraft will say what it can
+    codec, pix = st.get("codec_name"), st.get("pix_fmt")
+    if codec in FILMCRAFT_OK and pix not in FILMCRAFT_OK[codec]:
+        return (f"{Path(path).name}: {codec} {st.get('profile', '')} {pix} won't decode in FilmCraft (it would export "
+                f"a MEDIA UNREADABLE card). Transcode first: ffmpeg -i \"{path}\" -c:v libx264 -pix_fmt yuv420p "
+                f"-crf 16 -c:a copy \"{Path(path).with_suffix('').as_posix()}_8bit.mp4\"")
+    return None
+
+
 def knots(path: np.ndarray, tol: float = 3.0) -> list[int]:
     """Keyframe frames for a per-frame path: Douglas-Peucker simplification, so linear
     interpolation between the returned frames stays within `tol` source pixels of the path.
@@ -165,6 +188,9 @@ def build(plan: dict, cli: str) -> dict:
         fc.run("file.newSequence", {"name": plan.get("name", "clip"), "width": w, "height": h, "fps": fps})
         names = list(plan["sources"])
         paths = [str(Path(plan["sources"][k]).resolve()) for k in names]
+        bad = [m for m in (check_decodable(p) for p in paths) if m]
+        if bad:
+            raise ValueError("\n".join(bad))
         items = dict(zip(names, fc.run("file.import", {"paths": paths})["items"]))
         sizes = {k: probe_size(cli, p) for k, p in zip(names, paths)}
 

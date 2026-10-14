@@ -62,13 +62,33 @@ def find_cli() -> str | None:
     return None
 
 
+def decodable_checks(problems: list) -> None:
+    """Sources FilmCraft can't decode must be refused before import (it would otherwise export a
+    MEDIA UNREADABLE card): 10-bit H.264 and 4:2:2 HEVC refused, 8-bit H.264 and 10-bit 4:2:0
+    HEVC (phone HDR) accepted."""
+    with tempfile.TemporaryDirectory() as td:
+        src = ["-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=0.5"]
+        cases = {"ok_h264.mp4": (["-c:v", "libx264", "-pix_fmt", "yuv420p"], True),
+                 "bad_h264_10.mp4": (["-c:v", "libx264", "-pix_fmt", "yuv420p10le", "-profile:v", "high10"], False),
+                 "ok_hevc_10.mov": (["-c:v", "libx265", "-pix_fmt", "yuv420p10le", "-x265-params", "log-level=error"], True),
+                 "bad_hevc_422.mov": (["-c:v", "libx265", "-pix_fmt", "yuv422p10le", "-x265-params", "log-level=error"], False)}
+        for name, (args, ok) in cases.items():
+            f = str(Path(td) / name)
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *src, *args, f], check=True)
+            msg = p2f.check_decodable(f)
+            if (msg is None) != ok or (msg and "ffmpeg -i" not in msg):
+                problems.append(f"check_decodable({name}) -> {msg!r}, want {'ok' if ok else 'refused'}")
+
+
 def main() -> int:
+    problems = []
+    if shutil.which("ffmpeg"):
+        decodable_checks(problems)
     cli = find_cli()
     if not cli or not shutil.which("ffmpeg"):
-        print("SKIP  needs ffmpeg and a filmcraft-cli build (set FILMCRAFT_CLI)")
-        return 0
+        print("FAIL\n  " + "\n  ".join(problems) if problems else "SKIP  needs ffmpeg and a filmcraft-cli build (set FILMCRAFT_CLI)")
+        return 1 if problems else 0
     rng = np.random.default_rng(1)
-    problems = []
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         make_fixtures(d)
