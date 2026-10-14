@@ -27,7 +27,7 @@ Three gaps between "whatstheID knows the BPM" and "Serato shows the right grid":
    offset. Calibrate MP3s separately with `compare` and pass `--offset-ms`.
 
     python serato_writeback.py anchor track.flac --bpm 132.0
-    python serato_writeback.py write track.flac --rb2serato seratotags.py --cues-only --cue "drop=95.31"
+    python serato_writeback.py write track.flac --rb2serato seratotags.py --cues-only --bpm 132.0 --anchor 0.214 --cue "drop=95.33"
     python serato_writeback.py write track.flac --rb2serato seratotags.py --bpm 132.0 --anchor 0.214 --cue "drop=95.31"
     python serato_writeback.py read track.flac --rb2serato seratotags.py
     python serato_writeback.py compare ours.json serato.json   # anchor error vs Serato, per track
@@ -196,6 +196,31 @@ def grid_anchor(y, sr: int, bpm: float, beat_one: int | None = None, hop: int = 
             "bpm_in": bpm, "fit_rms_ms": round(rms * 1000, 2), "drift_ms": round(drift, 2),
             "beats_used": used, "kicks_found": len(hits), "comb_score": round(score, 3),
             "downbeat": beat_one is not None}
+
+
+def snap_cues(cues: list[dict], anchor_s: float, bpm: float, every_beats: int = 1,
+              max_shift_ms: float = 80.0) -> tuple[list[dict], list[dict]]:
+    """Move each cue onto the nearest grid line (every beat, or every 4 for bars).
+
+    whatstheID's cues are snapped to librosa's beats, which sit ~25 ms after the kick (its drop
+    cue on a recorded loop: 13.47 s against a kick at 13.443 s); a hot cue there starts just
+    after the attack. A cue further than max_shift_ms from any line is left alone and
+    reported, because it was probably placed on purpose. Returns (cues, moves)."""
+    if not (bpm and bpm > 0 and math.isfinite(anchor_s)):
+        raise ValueError("snapping needs a grid (anchor and BPM)")
+    step = 60.0 / bpm * max(1, int(every_beats))
+    out, moves = [], []
+    for c in cues or []:
+        t = float(c["time"])
+        k = round((t - anchor_s) / step)
+        g = anchor_s + k * step
+        if g >= 0 and abs(g - t) * 1000 <= max_shift_ms:
+            out.append({**c, "time": round(g, 4)})
+            moves.append({"label": c.get("label", ""), "from": t, "to": round(g, 4), "ms": round((g - t) * 1000, 1)})
+        else:
+            out.append(dict(c))
+            moves.append({"label": c.get("label", ""), "from": t, "to": t, "ms": 0.0, "kept": "no grid line within reach"})
+    return out, moves
 
 
 # --------------------------------------------------------------------------- 2. payloads
@@ -432,7 +457,7 @@ def raw_tags(path: str) -> dict:
 
 
 def write(path: str, st, bpm: float | None, anchor_s: float | None, cues=None, lock: bool = False,
-          backup_dir=None, offset_ms: float = 0.0, grid: bool = True) -> dict:
+          backup_dir=None, offset_ms: float = 0.0, grid: bool = True, snap: bool = True) -> dict:
     """Add cues (and, with grid=True, a grid) without losing what you set in Serato.
 
     Your existing cues, loops, track colour and BPM lock are kept; new cues fill free slots.
@@ -441,6 +466,9 @@ def write(path: str, st, bpm: float | None, anchor_s: float | None, cues=None, l
     0 for FLAC and WAV; for MP3, Serato and FFmpeg/libmad decoders disagree by roughly 24-26
     ms (Mixxx applies -26 ms at 44.1 kHz and -24 ms at 48 kHz when importing Serato cues, and
     other values under Core Audio), so measure yours with `compare` on MP3s Serato analysed."""
+    moves = []
+    if snap and cues and bpm and anchor_s is not None:
+        cues, moves = snap_cues(cues, anchor_s, bpm)  # onto the grid before any offset is applied
     if offset_ms:
         if grid and anchor_s is not None:
             anchor_s = anchor_s + offset_ms / 1000.0
@@ -464,7 +492,7 @@ def write(path: str, st, bpm: float | None, anchor_s: float | None, cues=None, l
     if Path(path).suffix.lower() == ".flac":
         tags.pop("Serato Markers_")  # no FLAC field for it in the format notes
     res = safe_write(path, lambda t: _tag_file(t, tags), backup_dir)
-    return {**res, "cues_added": added, "cues_skipped": skipped, "grid_written": grid}
+    return {**res, "cues_added": added, "cues_skipped": skipped, "cue_moves": moves, "grid_written": grid}
 
 
 def read(path: str, st) -> dict:
@@ -518,6 +546,7 @@ def main(argv=None) -> int:
     w.add_argument("--bpm", type=float)
     w.add_argument("--anchor", type=float)
     w.add_argument("--cues-only", action="store_true", help="add cues, leave the file's grid alone")
+    w.add_argument("--no-snap", action="store_true", help="don't move cues onto the grid (given --bpm and --anchor)")
     w.add_argument("--cue", action="append", default=[], help="label=seconds")
     w.add_argument("--lock", action="store_true")
     w.add_argument("--backup-dir")
@@ -539,7 +568,8 @@ def main(argv=None) -> int:
         if not args.cues_only and (args.bpm is None or args.anchor is None):
             ap.error("--bpm and --anchor are required unless --cues-only")
         print(json.dumps(write(args.audio, load_seratotags(args.rb2serato), args.bpm, args.anchor, cues,
-                               args.lock, args.backup_dir, args.offset_ms, grid=not args.cues_only)))
+                               args.lock, args.backup_dir, args.offset_ms, grid=not args.cues_only,
+                               snap=not args.no_snap)))
     elif args.cmd == "read":
         print(json.dumps(read(args.audio, load_seratotags(args.rb2serato)), indent=2))
     else:

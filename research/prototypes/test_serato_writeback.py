@@ -114,7 +114,7 @@ def write_checks(problems: list, st_path: str) -> dict:
             f = d / f"track{ext}"
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(d / "src.wav"), *args, str(f)], check=True)
             before = sw.audio_digest(f)
-            sw.write(str(f), st, bpm, anchor, cues, lock=False, backup_dir=d / "backup")
+            sw.write(str(f), st, bpm, anchor, cues, lock=False, backup_dir=d / "backup", snap=False)
             if sw.audio_digest(f) != before:
                 problems.append(f"{ext}: audio changed")
             if not (d / "backup" / f.name).exists():
@@ -171,10 +171,18 @@ def write_checks(problems: list, st_path: str) -> dict:
         shutil.copy2(d / "src.wav", d / "offset.wav")
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(d / "offset.wav"), "-c:a", "libmp3lame",
                         "-b:a", "192k", str(f)], check=True)
-        sw.write(str(f), st, bpm, anchor, cues, offset_ms=26.0)
+        sw.write(str(f), st, bpm, anchor, cues, offset_ms=26.0, snap=False)
         back = sw.read(str(f), st)
         if abs(back["grid"][0]["position_s"] - (anchor + 0.026)) > 1e-5 or back["cues"][1]["ms"] != 58416:
             problems.append(f"offset not applied: {back}")
+
+        # with a grid known, cues land on it (whatstheID's sit ~25 ms after the kick)
+        f = d / "snap.flac"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(d / "src.wav"), str(f)], check=True)
+        res = sw.write(str(f), st, bpm, anchor, [{"time": anchor + 128 * 60 / bpm + 0.027, "label": "drop"}], grid=False)
+        want = round((anchor + 128 * 60 / bpm) * 1000)
+        if sw.read(str(f), st)["cues"][0]["ms"] != want or abs(res["cue_moves"][0]["ms"] + 27.0) > 0.2:
+            problems.append(f"snapped write: {sw.read(str(f), st)['cues']} {res['cue_moves']} want {want}")
 
         # your own Serato work survives: cues stay in their slots, loops, colour, lock and grid stay
         for ext in (".flac", ".mp3"):
@@ -242,6 +250,12 @@ def main() -> int:
         rep["write"] = write_checks(problems, st_path)
     else:
         note = " (anchor only; the write checks need ffmpeg, mutagen and RB2SERATO_TAGS)"
+    # whatstheID's cues sit ~25 ms after the kick; snapping puts them on the grid, and leaves a
+    # cue that isn't near any grid line where it was
+    snapped, moves = sw.snap_cues([{"time": 13.47, "label": "drop"}, {"time": 20.36, "label": "odd"}], 0.0032, 125.0)
+    if abs(snapped[0]["time"] - 13.4432) > 1e-4 or snapped[1]["time"] != 20.36 or "kept" not in moves[1]:
+        problems.append(f"snap_cues: {snapped} {moves}")
+    rep["snap"] = moves
     rep["compare"] = sw.compare({"a": {"bpm": 132, "anchor_s": 0.215}, "b": {"bpm": 132, "anchor_s": 0.66955}},
                                 {"a": {"bpm": 132, "anchor_s": 0.211}, "b": {"bpm": 132, "anchor_s": 0.211}})
     if [r["error_ms"] for r in rep["compare"]["rows"]] != [4.0, 4.0]:

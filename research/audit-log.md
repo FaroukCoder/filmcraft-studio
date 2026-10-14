@@ -1185,3 +1185,22 @@ Windows support is not stated. Added to #9 as the fallback if pose drops out, an
 (no weights reachable: Hugging Face is blocked).
 
 **Confidence changes:** none.
+
+## Round 53 — your own analyser on a real kick, and your library's formats (05:58–06:02 UTC)
+
+**Attack:** #10's prototype had been checked against my code; this round ran whatstheID's own `analyze.py`
+(`_analyze_sync`, unmodified) on the recorded 125 BPM loop, and counted formats in the repo's `library.json`.
+- **Tempo:** 124.99 BPM via the comb (prominence 27), key 8A, energy 8. Right to 0.01.
+- **Cues are ~25 ms late:** "drop" at 13.47 s against the kick at 13.443 s; the cues snap to librosa's
+  `beat_track` beats, which carry the onset-envelope lag. As Serato hot cues they would start just after the kick's
+  attack. `serato_writeback.py` now snaps cues onto the fitted grid by default (a cue > 80 ms from any line is left
+  where it is and reported); tested: a +27 ms cue lands on the line, a 200 ms-off cue stays, and the snapped write
+  reads back at the grid line. The byte round-trip tests now pass `snap=False` so they still test bytes.
+- **Your library:** 89 of the 90 entries in `library.json` are FLAC and 89 already carry analysis cues, so FLAC
+  support decides #10 and the cue data exists. (Aggregate counts only; nothing else from the file is in the report.)
+- **A patch for whatstheID, kept private:** `_comb_tempo` now keeps the phase it already searches and returns
+  `phase_s`, and `_analyze_sync` returns `beat_phase_s` (70-line diff). On the loop: 0.03 s against the transient at
+  0.0032 s, i.e. late by the documented onset lag, which the write-back's refinement removes. The diff goes to you
+  with the hand-back, not into this public branch.
+
+**Confidence changes:** none; #10's first step gains the patch.
