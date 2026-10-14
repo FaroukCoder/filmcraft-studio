@@ -781,3 +781,18 @@ bank accounts to Global Payouts, which makes it plausible but not confirmed for 
 piece; caption timing vs money path 2; Hermes' 64K floor vs the agent's `-c 65536`.
 
 **Confidence changes:** none, but Top 10 #4 would have produced an out-of-memory error on its first Q8 try.
+
+## Round 34 — Hermes already ships the vault layer (04:24–04:23 UTC)
+
+**Attack:** "recommending what you already have is a flaw". The report sent Hermes to the vault through an MCP
+server (MCPVault). Read Hermes' bundled skills: `obsidian` (filesystem-first read/search/create/edit, vault path from
+`OBSIDIAN_VAULT_PATH`) and `llm-wiki` (Karpathy's LLM-Wiki, your vault's pattern) are installed by default, MIT.
+Kanban tasks can run with the vault as their working directory (`dir:<absolute path>`), and Hermes' Kanban docs list
+"same profile + shared dir + cron → Obsidian vault" as the long-running-journal pattern.
+
+**Change:** Hermes uses its skills; MCPVault stays the layer for Claude Code and other agents and the `--read-only`
+instance for untrusted work. Reason it matters on 12 GB: with Tool Search off (required for Qwen, Top 10 #7) every
+MCP tool schema is in every prompt, while a skill is one line in the skills index until loaded. My first wording said
+skills cost nothing until used; corrected to "one index line".
+
+**Confidence changes:** none; one less moving part in Hermes' prompt.
