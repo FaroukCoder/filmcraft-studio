@@ -34,6 +34,9 @@ models:
       --fit on --fit-target 1536
       -c 65536 -np 1
       --chat-template-file C:/ai/templates/qwen3.6.jinja
+      # uncomment to let the agent read images (planner, defect checks); the projector
+      # must be Qwen3.6's own, Qwen3.5 projectors don't fit
+      # --mmproj C:/ai/models/mmproj-Qwen3.6-35B-A3B-BF16.gguf
     ttl: 900
 
   # Fallback daily driver if RAM is 16 GB: dense, fully on the GPU.

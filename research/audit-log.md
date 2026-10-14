@@ -324,3 +324,33 @@ llama-swap model; ctc-forced-aligner in the sources table; three rows in "Still 
 
 **Confidence changes:** Top 10 #4 stays medium (speed evidence better, `--fit` on Windows untested).
 Money path 2 gets one more day of work before the first proposal.
+
+## Round 12 — contradictions (03:01–03:09 UTC)
+
+**Attack:** read the report against itself: same component, different advice in two places.
+
+**What broke**
+- **Round 8 over-corrected on Ollama.** #15783 (penalties ignored) was closed as "obsoleted by the switch to
+  llama-server in 0.30.0", which doesn't confirm penalties work. The umbrella issue
+  [#14493](https://github.com/ollama/ollama/issues/14493) is **still open**, with June–September 2026 reports that
+  Ollama's stock Qwen 3.5 renderer misses tool calls (v0.30.7: 2/5 relay calls, 4/5 with a `qwen3-coder`
+  renderer override). Fix: Day 2 diagnoses on Ollama, Day 3 reruns the same reels on llama-server to rule Ollama
+  out; Top 10 #4 now says not to move Qwen3.5/3.6 onto Ollama.
+- **Top 10 #4 led with Hermes' managed llama.cpp runtime while #6 put every GPU server behind llama-swap.** Two
+  runtimes would mean two GPU owners. Now explicit: your own llama-server behind llama-swap.
+- **Three models where one or two would do.** Creative Studio's planner was Qwen3.5-9B, Hermes ran
+  Qwen3.6-35B-A3B, Reel Brain a separate VLM. Qwen3.6-35B-A3B has its own vision projector, so the planner is now
+  the agent model, the defect checker is Reel Brain's VLM, and the agent model joins Reel Brain's A/B: if it ties,
+  one loaded model serves all three and nothing swaps. Added as cross-project piece 7; the YAML has a commented
+  `--mmproj` line.
+- **Beat This:** the models table said `final0`, the prototype and the Giant Steps evidence say small models; now
+  `small0` everywhere.
+- **"The first week touches only Creative Studio, Hermes/Laya and the GPU setup"**, while Day 2 is Reel Brain and
+  Day 6 is a set grid. Reworded.
+- Leftovers: "GPU broker" (killed in round 6) still appeared in Reel Brain; "Ollama issue above" pointed at
+  nothing; EmbeddingGemma was listed as Laya's model (it's the baseline).
+
+**Kills:** the separate planner model; the managed runtime as the recommended path.
+
+**Confidence changes:** Top 10 #3 stays medium; the Ollama-vs-llama-server rerun on Day 3 now settles the server
+question within the first week.

@@ -16,7 +16,7 @@
 - **Don't build the Inspiration Canvas app.** Store boards as JSON Canvas in your vault (or buy Eagle for $35) and spend the time on Creative Studio.
 - **Don't take whatstheID public.** The "paste a mix, get a tracklist" space is crowded and the download features carry legal risk. Finish the Serato write-back; it is the part nobody else does.
 - **Generated video (MiniMax H3) and generated stills (Qwen-Image 2.1) don't belong in paid club clips,** for licence reasons and because the product is that it was real.
-- **Five projects plus a FilmCraft fork is too many for one person.** The Top 10 is ordered so the first week touches only Creative Studio, Hermes/Laya and the shared GPU setup.
+- **Five projects plus a FilmCraft fork is too many for one person.** The first week touches Creative Studio, Hermes/Laya, the shared GPU setup, and Reel Brain's looping JSON only because it shares the GPU and the vision model; whatstheID and the canvas wait.
 
 ---
 
@@ -53,13 +53,14 @@
 ### 3. Fix Reel Brain's looping JSON at the source: image-token budget, sampling, quant, bounded schema
 - **Why:** two open issues match your stack closely. Ollama [#13084](https://github.com/ollama/ollama/issues/13084): Qwen3-VL 4B/8B on **Windows with an RTX 3080** produces "highly unsorted contents" or repeats short sentences once the prompt exceeds `num_ctx`; the reporter's images were 3236×2160 and the logs said "truncating input prompt". [QwenLM/Qwen3-VL#1611](https://github.com/QwenLM/Qwen3-VL/issues/1611): Qwen3-VL loops across runtimes (Transformers, Ollama, LM Studio, llama.cpp), more with **greedy decoding** and **low (4-bit) quants**; the same author ran GLM-4.6V-Flash on 500 cases with zero loops. A Qwen-VL image costs roughly `h × w / (32 × 32)` tokens, so a full-resolution 1080×1920 frame is ~2,000 tokens and eight of them ~16,000. **And on a card under 24 GB, Ollama's default context is 4K tokens** ([Ollama docs](https://docs.ollama.com/context-length)): unless Reel Brain sets `num_ctx` on every request (its code isn't on GitHub, so I couldn't check), three full-resolution frames already overflow it, which is exactly the truncation in #13084. Check this first.
 - **Do:** (1) downscale frames to ≤ 640 px on the long side (~300–400 tokens each), cap at 6–8 per reel, set `num_ctx` explicitly and log prompt tokens per request; (2) use Qwen's recommended Instruct sampling (temperature 0.7, top-p 0.8, top-k 20, presence penalty 1.5), not temperature 0; (3) Q6_K or Q8_0 instead of Q4 if it fits (an 8B at Q8 is ~8.5 GB plus the projector); (4) a schema that cannot run away: `maxItems` on every array, `maxLength` on strings, enums, thinking off, a hard cap on output tokens; validate with Pydantic, retry once, then fall back to "free text → a second small call that only formats JSON"; (5) A/B GLM-4.6V-Flash (9B, MIT per model listings, GGUF available) on the same 20 reels.
-- **Correction from round 8:** earlier drafts blamed Ollama ignoring repetition penalties. That bug was real ([#15783](https://github.com/ollama/ollama/issues/15783)) but was **closed in July 2026 as obsoleted by Ollama 0.30.0, which moved its engine onto llama.cpp**. It only matters if your Ollama is older than 0.30: check `ollama --version`, and update if so. Ollama stays fine for this job; moving it behind llama-swap (Top 10 #6) is about sharing the GPU, not about JSON.
+- **Correction from round 8:** earlier drafts blamed Ollama ignoring repetition penalties. That bug was real ([#15783](https://github.com/ollama/ollama/issues/15783)) but was **closed in July 2026 as obsoleted by Ollama 0.30.0, which moved its engine onto llama.cpp**. It only matters if your Ollama is older than 0.30: check `ollama --version`, and update if so. But the closing comment only says "obsoleted by the switch to llama-server"; the older umbrella issue [#14493](https://github.com/ollama/ollama/issues/14493) is still open and nobody there has confirmed penalties on 0.30+. So run the diagnosis on Ollama (Day 2), then rerun the same reels on plain llama-server behind llama-swap (Day 3) to rule Ollama out; keep whichever loops less.
 - **Confidence: medium.** The issues match your hardware and model; nobody has run your prompts.
 - **Could fail if:** the prompts themselves invite open-ended lists or the model needs thinking to read the frames. The bounded schema and the GLM A/B cover those.
 - **First step:** record your Ollama version and the prompt-token count for the 20 reels that failed most recently, then rerun them with downscaled frames and the recommended sampling. [`prototypes/vlm_json_guard.py`](prototypes/vlm_json_guard.py) does all of that against Ollama or any OpenAI-compatible server.
 
 ### 4. Move Hermes to llama.cpp with expert offload, and cut the tool list by hand
 - **Why:** Hermes now ships a managed llama.cpp runtime that places MoE expert weights in system RAM first and keeps attention and KV cache on the GPU, with a guaranteed ≥64K context and 15-minute idle unload ([local-models docs](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/local-models.md)). On a 12 GB RTX 3060 users report Qwen3.6-35B-A3B generating at **~35–45 tok/s** with expert offload: InsiderLLM (32 GB DDR4, Q4_K_M) found `--n-cpu-moe 24` fastest at 38.9 tok/s, flat to 8K context, and retracted an earlier "20 is fastest"; [one user](https://x.com/DogukanUrker/status/2077472690156511643) reports ~45 tok/s at `--n-cpu-moe 26` with UD-Q4_K_XL, 150K context and **only 16 GB of RAM**, the key being `-np 1` (one server slot). Treat the May 2026 r/LocalLLaMA figure of 46.8 tok/s at `-ncmoe 18` with suspicion: by my arithmetic 22 layers of Q4_K_M experts don't fit in 12 GB, so it was a smaller quant or llama-bench's tiny context. Your 3080 Ti has ~2.5× the 3060's memory bandwidth, but the offloaded experts run at your system RAM's speed, so expect a similar number, not 2.5× it. Hermes' own docs say prefill of the system prompt plus tool schemas dominates first-token time on local models, so the fixed prompt is the first thing to shrink: `hermes prompt-size` shows it, `hermes tools` and per-profile toolsets cut it.
+- **Run your own `llama-server` behind llama-swap, not Hermes' managed runtime**, so one process owns the GPU (trade-off in #6). And don't move Qwen3.5/3.6 onto Ollama instead: its stock Qwen 3.5 renderer still misses tool calls in reports from June–September 2026 (a v0.30.7 tester got 2 of 5 relay calls, 4 of 5 with a `qwen3-coder` renderer override; [#14493](https://github.com/ollama/ollama/issues/14493), open). Your current Qwen3-Coder-30B on Ollama uses a different renderer, which is why it can stay as the fallback.
 - **Do not turn on Tool Search with Qwen models yet.** Its bridge tool is literally named `tool_call`, which collides with the `<tool_call>` tag in Qwen chat templates; Qwen models call the bridge malformed five times and the guardrail halts the turn ([#110442](https://github.com/NousResearch/hermes-agent/issues/110442), open; the rename to `invoke_tool` is in an unmerged PR). The documented workaround is `hermes config set tools.tool_search.enabled off`.
 - **Known Qwen3.6 + llama.cpp issues in Hermes, with workarounds:** pass `--chat-template-file` with the right Qwen template, not only `--jinja`, or output can be garbage ([#29677](https://github.com/NousResearch/hermes-agent/issues/29677)); leave `capabilities.answer_in_reasoning` unset, because a tool call stranded inside `<think>` still happened in **1 of 23 tool-call turns** ([#129440](https://github.com/NousResearch/hermes-agent/issues/129440)); `search_files` can loop when the model passes a glob as a regex ([#66129](https://github.com/NousResearch/hermes-agent/issues/66129)). Expect a few percent of turns to need a retry: "reliable" at 12 GB means "recovers well", not "never fails".
 - **Model:** Qwen3.6-35B-A3B (Apache-2.0, April 2026) if you have ≥32 GB RAM (16 GB has been reported to work, but not with Serato, Chrome and ComfyUI also open); it scores 81.2 on TAU2 agentic tool use against 68.2 for Gemma 4 26B-A4B (vendor-adjacent numbers). Otherwise Qwen3.5-9B (Apache-2.0, dense, hybrid attention so long context is cheap) fully on GPU.
@@ -162,6 +163,11 @@ Download a CUDA build of llama.cpp (`llama-b<N>-bin-win-cuda-…-x64.zip` from i
 llama-swap --config llama-swap.yaml --listen 127.0.0.1:8080
 python dj_guard.py --llama-swap http://127.0.0.1:8080
 ```
+Rerun Day 2's reels against llama-server to rule Ollama out:
+```powershell
+python vlm_json_guard.py C:\reels\failed\reel01.mp4 --api openai --url http://127.0.0.1:8080 --model vlm --context (Get-Content C:\reels\failed\reel01.txt -Raw)
+```
+Once the VLM lives in llama-swap, quit Ollama (or point the guard's `--stop` at it) so two servers don't share the card.
 Start Serato and confirm the guard logs "DJ mode on" and `nvidia-smi` shows the card empty. Then run one long Reel Brain batch
 with HWiNFO logging GPU memory-junction temperature and `nvidia-smi --query-gpu=power.draw,clocks.gr,temperature.gpu,memory.used --format=csv -l 1 > gpu.csv`.
 If junction temperature passes ~100 °C, cap clocks (`nvidia-smi -lgc 210,1700` in an admin shell) and plan new thermal pads.
@@ -254,7 +260,7 @@ Nothing I found edits DJ-set footage from Serato data, so Creative Studio is not
 4. The LLM only chooses among pre-scored candidates and writes the plan as JSON; it does not watch video.
 
 **Planner and judge in 12 GB**
-- Planner: Qwen3.5-9B (Apache-2.0, natively multimodal) or your Hermes model; constrained JSON via llama.cpp.
+- **Planner: the Hermes agent model, not a third model.** Qwen3.6-35B-A3B reads images too (its GGUF ships a vision projector; Qwen3.5 projectors don't fit it), and with 16 GB RAM the fallback Qwen3.5-9B is multimodal as well. Constrained JSON via llama.cpp. Defect checks use whichever VLM wins Reel Brain's A/B (Top 10 #3). Every extra model is another swap on one card.
 - **Don't let a model judge taste.** Timeline-Bench (arXiv 2609.35143, Sep 2026) gave agents 56 realistic raw-footage editing tasks: the best resolved 26.8 %, the average 14 %, and most failed runs failed *only* the quality test, which the authors attribute to agents judging footage through stills and transcripts rather than craft. Pairwise LLM judges still flip with presentation order in up to 20 % of cases (J1, 2025). Use the VLM as a **defect checker** with yes/no questions on contact sheets (text over a face? cut mid-word? black or frozen frames? drop missing? first frame dark?) and keep the taste pick for yourself or for Trial Reels.
 - **Write the plan as OpenTimelineIO.** FilmCraft imports and exports OTIO (`crates/interchange`); a plan in OTIO plus a sidecar JSON for effects decouples Creative Studio from FilmCraft's command IDs, which change fast (upstream merged hundreds of PRs in October), and gives you a fallback editor if a FilmCraft build misbehaves on Windows. Pin the fork to a release tag (latest: v0.7.2) rather than tracking `main`.
 
@@ -274,8 +280,9 @@ Nothing I found edits DJ-set footage from Serato data, so Creative Studio is not
 **Models (12 GB)**
 | Job | Model | Licence | VRAM (approx.) |
 |---|---|---|---|
-| Beats/downbeats | Beat This `final0` | MIT | < 1 GB |
-| Planner / judge | Qwen3.5-9B Q5 + mmproj | Apache-2.0 | ~7–8 GB |
+| Beats/downbeats | Beat This `small0` (the small models did better on constant tempo in the Giant Steps run) | MIT | < 1 GB |
+| Planner | Hermes' agent model (Qwen3.6-35B-A3B + mmproj, or Qwen3.5-9B) | Apache-2.0 | shared with Hermes |
+| Defect checker | The Reel Brain VLM that wins the A/B | per model | shared with Reel Brain |
 | Pose | RTMPose (rtmlib, ONNX) | Apache-2.0 | < 1 GB |
 | Taste head | SigLIP base + logistic | Apache-2.0 | < 1 GB |
 | Stills (commercial) | FLUX.2 klein 4B / Z-Image-Turbo | Apache-2.0 | ~8–13 GB / ~6–10 GB quantized |
@@ -335,16 +342,17 @@ Arabic's timestamp support is reported both ways; check its model card before co
 | Router | Laya (`laya` 421M ModernBERT-large / `laya-multilingual` 322M mmBERT-base), fine-tuned | CPU, 0.4–0.8 s with pinned threads |
 | Router baseline | EmbeddingGemma-300M + logistic regression | CPU, milliseconds |
 
-**Open risks:** Qwen 3.5/3.6 tool-call templates are fragile across servers (Ollama issue above; use `--jinja` and the `qwen3_coder` parser where offered). Hermes' 48k open issues/PRs means fast churn: pin a version.
+**Open risks:** Qwen 3.5/3.6 tool-call templates are fragile across servers (Ollama [#14493](https://github.com/ollama/ollama/issues/14493), Hermes #29677; on llama-server pass `--jinja` plus the right `--chat-template-file`). Hermes' 48k open issues/PRs means fast churn: pin a version.
 
 ### 2.3 Reel Brain
 
 **Adopt**
 - Frame-token budget, Qwen's recommended sampling, a higher quant and bounded schemas for the VLM (Top 10 #3). Try **GLM-4.6V-Flash** (9B, MIT per listings) beside Qwen3-VL-8B.
+- **Add the agent model to the A/B.** If Qwen3.6-35B-A3B with its projector matches the best VLM on the 20 failing reels, use it for everything: Hermes, planner and Reel Brain then share one loaded model and never swap. It will be slower per reel (prompt processing runs partly on CPU experts), which a night batch can afford.
 - **Try Qwen3.5-9B against Qwen3-VL-8B** on 30 reels: Qwen says 3.5's early-fusion training beats Qwen3-VL on visual understanding (vendor claim). MiniCPM-V 4.5 (8.7B, reports 73.5 on Video-MME, llama.cpp support since b6282) is the video-specialised alternative; its weights have historically been under the custom MiniCPM Model License (commercial use after a registration form), which is fine for a personal pipeline.
 - Linear probe + top-3 classification; repo verification with a "no repo" outcome (below).
 - Port ideas from juspay/dopamine: link resolver that remembers failed lookups, verifier, project mapper with "avoid".
-- Run batches through the GPU broker with per-item checkpoints (SQLite job table) so a crash costs one reel, not the run.
+- Run batches through llama-swap with per-item checkpoints (SQLite job table) so a crash costs one reel, not the run.
 - **Do less GPU work per reel.** Classify and summarise from caption + transcript + OCR first (CPU or a small model), and call the VLM only when the frames carry information the text does not (screen recordings, UI demos, diagrams). On talking-head reels the transcript is the content.
 
 **Classification and repo linking**
@@ -418,7 +426,8 @@ What you already have (from the repo): shazamio + AudD, your own landmark finger
 3. **One vault access layer:** a single MCP server over the Obsidian vault (read/write notes, search by text and embeddings) used by Hermes, Claude Code, Reel Brain and the canvas. You already write to the vault via `learn-to-vault` / claude-obsidian (Karpathy LLM-wiki pattern); don't add a second memory database that drifts from it.
 4. **One verification module** for "does this search hit really match": whatstheID's `verify.py` rules reused for Reel Brain's tool→repo links.
 5. **Shared audio analysis:** whatstheID's comb-filter tempo and key code, Beat This, and Serato readers serve both whatstheID and Creative Studio.
-6. **Shared embeddings:** EmbeddingGemma for Laya, Reel Brain and canvas search.
+6. **Shared embeddings:** EmbeddingGemma for the Laya baseline, Reel Brain's collections and canvas search.
+7. **One vision-language model where possible:** the Hermes agent model doubles as Creative Studio's planner, and if it wins Reel Brain's A/B it does that job too (2.3). Fewer models means fewer swaps on one card.
 
 ---
 
