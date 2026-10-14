@@ -704,3 +704,15 @@ with `os._exit` in the middle of an item) followed by a restart that redoes exac
 
 **Confidence changes:** none to the Top 10 (it implements #2's step 4); Reel Brain's crash pain point now has a
 concrete, tested mitigation.
+
+## Round 29 — Reel Brain classification: a measuring tool instead of a claim (04:12–04:14 UTC)
+
+**Attack:** the report says a linear probe and top-3 will beat your 63 % kNN. That is general ML experience, not a
+measurement on your folders. Built `prototypes/collections_probe.py` so you can measure it on the embeddings you
+already have: kNN (1/5/15, cosine), a logistic-regression probe, the probe's top-3, an ask-me-when-unsure margin
+rule, per-folder accuracy and the most-confused pairs, all under the same 5-fold CV; `--predict` gives top-3 for new
+reels. Synthetic test (1,000 items, 8 imbalanced folders, signal in 16 of 256 dims, two overlapping folders): kNN
+0.75–0.81, probe 0.86, top-3 0.999, the rule sends 13 % to you at 91 % on the rest, and the overlapping pair tops
+the confusions. The test asserts the tool's behaviour, not that the probe wins: that is the question for your data.
+
+**Confidence changes:** none (Reel Brain classification stays medium until it runs on your data).
