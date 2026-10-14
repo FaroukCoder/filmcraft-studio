@@ -46,7 +46,7 @@ def main() -> int:
         problems.append(f"ECE should expose over-confidence, got {rep['ece']}")
     if rep.get("baseline_cv_accuracy", 0) < 0.9:
         problems.append(f"baseline should learn the routes, got {rep.get('baseline_cv_accuracy')}")
-    # export to Laya's training-row format
+    # export to Laya's JSONL case format and to a CSV for laya-train
     q = {"route": {"type": "choice", "instructions": "Which agent should handle this?",
                    "criteria": {k: f"{k} requests" for k in ROUTES}}}
     with tempfile.TemporaryDirectory() as d:
@@ -54,8 +54,15 @@ def main() -> int:
         qf.write_text(json.dumps(q), encoding="utf-8")
         laya_eval.main([f.name, "--export-rows", str(out), "--questions", str(qf), "--qid", "route"])
         first = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
-        if set(first) != {"state", "questions", "gold"} or first["gold"]["route"] not in ROUTES:
+        if set(first) != {"state", "questions", "expected"} or first["expected"]["route"] not in ROUTES:
             problems.append(f"bad export row: {first}")
+        csv_out = Path(d) / "routes.csv"
+        laya_eval.main([f.name, "--export-csv", str(csv_out)])
+        import csv
+        with open(csv_out, encoding="utf-8", newline="") as fh:
+            got = list(csv.DictReader(fh))
+        if len(got) != 400 or set(got[0]) != {"text", "label"} or not any("الحفلة" in g["text"] for g in got):
+            problems.append(f"bad CSV export: {len(got)} rows, first {got[:1]}")
     print("FAIL\n  " + "\n  ".join(problems) if problems else "PASS")
     return 1 if problems else 0
 

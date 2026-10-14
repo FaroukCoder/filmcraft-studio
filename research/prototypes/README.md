@@ -13,7 +13,7 @@ and should run on Windows, but **nobody has run them on Windows yet**.
 | `serato_set_grid.py` | #7 | Reads Serato 4 `master.sqlite` history; aligns a track you own inside your set recording (offset + stretch ratio) and maps its grid into set time | Track played 3 % fast with its bass cut for a 30 s blend and noise on top: ratio 1.030 (true 1.03), offset 50.015 s (true 50.0) |
 | `l1_reframe_path.py` | #9 | L1-optimal (Grundmann et al.) 9:16 crop path from noisy subject positions | 20 s DJ, 15 px jitter, 10 % missed detections: 83.6 % of frames static, 0 direction changes, subject in frame 100 %; an EMA follow: 11.5 % static, 189 direction changes. Solves 600 frames in 0.2 s |
 | `dj_guard.py` | #6 | Unloads llama-swap/ComfyUI and stops GPU services while Serato or Ableton runs; `gpu_allowed()` for batch jobs | Stand-in app process: unload called, lock written, cleared after the grace period |
-| `laya_eval.py` | #2 | Accuracy per route, confusions, calibration (ECE), confidence gate, and a cheap baseline on the same labels | Router right 41 % at ~0.9 confidence: ECE 0.49 flagged; TF-IDF baseline 100 % on the learnable synthetic routes |
+| `laya_eval.py` | #2 | Accuracy per route, confusions, calibration (ECE), confidence gate, a cheap baseline on the same labels; exports a CSV for `laya-train` or Laya's JSONL cases | Router right 41 % at ~0.9 confidence: ECE 0.49 flagged; TF-IDF baseline 100 % on the learnable synthetic routes |
 | `llama-swap.example.yaml` | #6 | One exclusive GPU group: agent, small agent, two VLMs, Egyptian-Arabic ASR, ComfyUI | YAML parses; group members match model ids (not run: llama-swap is a Go binary I couldn't download here) |
 
 ## Setup (Windows, PowerShell, one command per line)

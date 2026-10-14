@@ -264,7 +264,7 @@ for the Reel Brain backlog is a conditional test. A tldraw canvas app stays reje
 
 **New facts:** Resolve 21.1 moved Python scripting to Studio and added a native MCP server; FLUX.2 klein 4B file
 layout from the ComfyUI tutorial (gated download, accept BFL licence); GLM-4.6V-Flash is listed by LM Studio with
-vision and tools; Laya's training rows are `{state, questions, gold}`.
+vision and tools; Laya's training rows are `{state, questions, gold}` (corrected in round 15: `gold` is teacher probabilities; plain labels go in `expected`).
 
 
 ## Round 10 — coverage check against the brief (02:48–02:55 UTC)

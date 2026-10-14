@@ -13,11 +13,18 @@ default; `--embed google/embeddinggemma-300m` uses sentence-transformers if inst
 
     python laya_eval.py routes.jsonl
     python laya_eval.py routes.jsonl --embed google/embeddinggemma-300m
+    python laya_eval.py routes.jsonl --export-csv routes.csv
     python laya_eval.py routes.jsonl --export-rows train_rows.jsonl --questions router_question.json --qid route
 
-The export writes Laya's own training-row format, one line per message:
-{"state": <message>, "questions": <your question set>, "gold": {<qid>: <label>}},
-which is what Laya's fine-tuning notebook builds from its benchmark dataset.
+Then fine-tune on your own GPU or CPU with Laya's `laya-train` (laya >= 0.4):
+
+    laya-train --data routes.csv --text-column text --label-column label --base multilingual --out laya-routes --dry-run
+
+`--export-csv` writes `text,label` rows (the label becomes a choice question over its distinct
+values). `--export-rows` writes Laya's JSONL case format, one line per message:
+{"state": <message>, "questions": <your question set>, "expected": {<qid>: <label>}};
+use it when your question has written criteria per option. (Laya's `gold` field is for teacher
+probabilities, not plain labels.)
 """
 from __future__ import annotations
 
@@ -117,17 +124,29 @@ def export_rows(rows: list[dict], questions: dict, qid: str, out_path: str) -> i
         for r in rows:
             if allowed and r["label"] not in allowed:
                 continue  # a label your question doesn't offer can't be learned
-            fh.write(json.dumps({"state": r["text"], "questions": questions, "gold": {qid: r["label"]}},
+            fh.write(json.dumps({"state": r["text"], "questions": questions, "expected": {qid: r["label"]}},
                                 ensure_ascii=False) + "\n")
             n += 1
     return n
+
+
+def export_csv(rows: list[dict], out_path: str) -> int:
+    import csv
+
+    with open(out_path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["text", "label"])
+        for r in rows:
+            w.writerow([r["text"], r["label"]])
+    return len(rows)
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("jsonl")
     ap.add_argument("--embed", help="sentence-transformers model id for the baseline")
-    ap.add_argument("--export-rows", help="write Laya training rows here")
+    ap.add_argument("--export-csv", help="write text,label rows for laya-train here")
+    ap.add_argument("--export-rows", help="write Laya JSONL cases (state, questions, expected) here")
     ap.add_argument("--questions", help="JSON file with your Laya question set (as passed to predict)")
     ap.add_argument("--qid", default="route", help="which question the labels answer")
     args = ap.parse_args(argv)
@@ -135,6 +154,8 @@ def main(argv=None) -> int:
     if not rows:
         print("no labelled rows", file=sys.stderr)
         return 1
+    if args.export_csv:
+        print(f"wrote {export_csv(rows, args.export_csv)} rows to {args.export_csv}")
     if args.export_rows:
         questions = json.load(open(args.questions, encoding="utf-8"))
         n = export_rows(rows, questions, args.qid, args.export_rows)
