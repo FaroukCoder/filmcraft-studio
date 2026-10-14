@@ -1089,3 +1089,25 @@ and unsupported numbers (14 / 10 / 12 / 10 items). Fixed:
   the numbers item extended with the untraceable Gemma speed and the stale Scribe price.
 
 **Not yet done:** cutting repetition; the report grew to 19.7k words while fixing. Next round cuts.
+
+## Round 48 — cut the repetition (05:36–05:43 UTC)
+
+**Attack:** "a shorter report that survived 6 audits beats a long one that survived 1." The reviewer's 12 repetition
+sites plus my own word counts per section.
+
+**Cut or merged:** #10 (964 → ~640 words: one "what it's worth" + "what rb2serato lacks" + prototype + confidence);
+#7 (895 → ~710: one speed paragraph, the model and challenger bullets merged, the 46.8 tok/s aside left to section 5);
+#2's second telling of the ComfyUI story; 2.1's seam and headless bullets (now a pointer to #5 plus the three
+lessons only testing showed); 2.1's taste and type bullets merged into the house-look block, which itself shrank;
+the shot-picking list and paragraph merged; the two Arabic-caption paragraphs tightened; 2.3's five separate
+VLM-candidate bullets merged into one A/B list (same 20 reels for every candidate); Dopamine said once instead of
+three times; the repo-linker failure list shortened; 2.4's downbeat bullet halved, its grid-quality and AudD
+paragraphs turned into pointers; rbxport (unreadable site) and pyrekordbox (you use Serato) dropped with their
+source rows; Hermes memory-plugin roster trimmed; money paths 1 and 3 tightened; Day 1/Day 4 "checked against code"
+notes shortened; Laya's Do list tightened.
+
+**Result:** 19.7k → 18.4k words with nothing actionable removed. The rest is the brief's required breadth (five
+projects, first week, money, sources). All 17 prototype tests pass, including the real llama-swap run against the
+config with the new `agent-gemma` entry.
+
+**Confidence changes:** none.
