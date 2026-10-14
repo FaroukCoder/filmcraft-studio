@@ -796,3 +796,13 @@ MCP tool schema is in every prompt, while a skill is one line in the skills inde
 skills cost nothing until used; corrected to "one index line".
 
 **Confidence changes:** none; one less moving part in Hermes' prompt.
+
+## Round 35 — newer VLMs for short video (04:27–04:23 UTC)
+
+**Attack:** "better alternatives" for Reel Brain's VLM at ≤ 12 GB. A broad search found research systems (Tempo,
+LLaVA-OneVision-2) without local builds or comparisons: nothing beats the existing candidates with evidence.
+**Found instead:** Gemma 4 12B (round 31's agent challenger) takes images in recent llama.cpp with a ~175 MB
+projector (third-party model cards; one reports verified OCR), has no llama.cpp video projector yet (irrelevant:
+Reel Brain sends frames), and is reportedly not supported by Ollama's projector loader yet. Fully on the card, it is
+the best candidate for "one model for Hermes, the planner and Reel Brain", which would remove model swaps entirely.
+Added to Reel Brain's A/B and to cross-project piece 7. No benchmark numbers claimed.
