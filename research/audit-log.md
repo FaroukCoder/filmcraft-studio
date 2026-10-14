@@ -68,3 +68,32 @@ remain unread: every licence claim that depends on one is marked medium confiden
 - Top 10 reshuffled: virality and Reel Brain classification moved into their project sections; Laya (#2) and a
   "house look" move (#8, low confidence) added.
 
+## Round 2 — Creative Studio audit (02:11–02:20 UTC)
+
+**Attacked:** licences of generation models, Beat This on electronic music, Serato history availability, the L1
+reframing idea, HyperFrames, the planner/judge design, the "measure reference clips" claim, FilmCraft as the base.
+
+**Killed or reversed**
+- **"VLM judge ranks variants pairwise"** → demoted to a defect checker. Timeline-Bench (Sep 2026): best agent
+  resolves 26.8 % of raw-footage editing tasks; most failures are quality failures from judging footage through
+  stills. Pairwise LLM judges flip with order in up to 20 % of cases (J1). A small local judge choosing between your
+  three variants is mostly noise; the taste pick stays human or goes to Trial Reels.
+- **"AutoFlip drifts more"**: my own unsupported claim. Removed. AutoFlip is also unsupported since 2023-03-01.
+- **HyperFrames as a drop-in**: its transparent WebM would lose alpha in FilmCraft (Matroska reader skips
+  BlockAdditions). Now: ProRes 4444 MOV for overlays, and skip its component catalog (templates = the slop look).
+
+**Confidence changes**
+- Top 10 #7 (grids from your own tracks): stays medium, but the Beat This fallback is now backed by a Giant Steps
+  benchmark (89.3 % / 95.0 %) and the maintainers' statement that the weights are MIT.
+- Top 10 #1 (licence): stays medium. GitHub README still says Apache-2.0 but predates 2.1; Hugging Face unreachable.
+- Top 10 #8 (look): stays low, now with motionmaxxing's measured basis (53 pro moments; transforms 3,392 vs fades 584).
+
+**Added**
+- OTIO as the plan format (FilmCraft imports/exports it); pin the fork to v0.7.2.
+- MC4000 unlocks Serato DJ **Lite** (History yes, built-in recording no); Serato 3.x history format differs.
+- Precedent for mix-to-track alignment on real mixes (Kim et al., ISMIR 2020); their code has no licence.
+- Low-light denoise and "deliver, don't auto-post" for client work.
+
+**Open for later rounds:** Timeline-Bench kappa figure (search snippet only; arXiv unreachable); MiniMax H3 licence
+text (HF unreachable); whether Instagram's API path allows reels with their own audio (one third-party claim says no).
+
