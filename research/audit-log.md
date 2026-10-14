@@ -480,7 +480,7 @@ Egyptian code-switched caption into a headless export.
 
 **Confidence changes:** Arabic captions in FilmCraft: low → high (tested). Top 10 #8 unchanged (still low: taste).
 
-## Round 18 — Creative Studio deep dive: the planner → FilmCraft seam, built and tested (03:22–03:40 UTC)
+## Round 18 — Creative Studio deep dive: the planner → FilmCraft seam, built and tested (03:22–03:35 UTC)
 
 **Attack:** the report told you to have an LLM plan drive the FilmCraft fork, but nothing had shown the fork can
 take a plan and produce a 9:16 clip with cuts, reframe, captions and audio. Built it instead of asserting it.
