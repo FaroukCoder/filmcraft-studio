@@ -285,3 +285,42 @@ vision and tools; Laya's training rows are `{state, questions, gold}`.
 models are not usable yet.
 
 **Confidence changes:** none.
+
+## Round 11 — fit, VRAM and Windows install pitfalls (02:55–03:01 UTC)
+
+**Attack:** for every recommended piece, "what happens the first evening you install it on Windows 10 with 12 GB?"
+Read install docs and source (Hermes platform pages, faster-whisper README, QwenCleo README and server, qwen-asr on
+PyPI, Beat This preprocessing, rtmlib, ctc-forced-aligner, whisperX alignment table, llama.cpp releases,
+llama-swap config reference) and redid the VRAM arithmetic for Qwen3.6-35B-A3B.
+
+**What broke**
+- **Egyptian-Arabic captions had no timing step.** QwenCleo returns text only; Qwen3-ForcedAligner covers 11
+  languages and Arabic is not one. Money path 2 (animated Arabic captions) silently depended on it. Added a
+  forced-alignment step: ctc-forced-aligner (BSD-2) with an Arabic wav2vec2 model, because **its default MMS
+  model is CC BY-NC 4.0** (stated in its README). Code-switched English words will need interpolated times.
+- **The example llama-swap config would probably have run out of VRAM.** By arithmetic (40 layers, ~0.49 GB of
+  Q4_K_M experts per layer, ~1.5 GB non-expert weights, ~1.3 GB KV at 64K because only 10 layers are full
+  attention, ~0.5 GB logits buffer for a 248K vocabulary), `--n-cpu-moe 22` needs ~12.5 GB. Measured reports
+  agree: InsiderLLM's best on a 3060 was 24 (38.9 tok/s) after retracting "20 is fastest"; a user ran 26 with
+  UD-Q4_K_XL at ~45 tok/s. Config now uses llama.cpp's `--fit` (default on) with a 1.5 GB margin and `-np 1`.
+- **The 46.8 tok/s at `-ncmoe 18` figure** from the May r/LocalLLaMA sweep can't be a Q4_K_M on 12 GB; demoted.
+  Speed range is now ~35–45 tok/s. The 3080 Ti's bandwidth advantage doesn't apply to experts in system RAM.
+- **"Needs 32 GB RAM" was too strong**: one user reports 16 GB working with `-np 1`. Softened to "32 GB
+  comfortable; 16 GB only with nothing else open".
+
+**Strengthened**
+- Top 10 #3: Ollama's documented default context on cards under 24 GB is **4K tokens**; three full-resolution
+  frames overflow it. If Reel Brain doesn't set `num_ctx`, this alone explains the loops. Confidence stays medium
+  only because Reel Brain's code isn't on GitHub.
+- Hermes runs natively on Windows 10 (Tier 1, `install.ps1`) and refuses local endpoints under 64K context, so the
+  Ollama 4K default can't bite Hermes, only Reel Brain.
+
+**Added:** a Windows install-pitfalls table in 1b (cudart zip, CUDA 13 driver floor, `--fit`, Ollama 4K default,
+Hermes 64K floor and Git Bash, faster-whisper DLLs, QwenCleo without vLLM, onnxruntime-gpu CUDA 13 wheels,
+torchaudio → TorchCodec, FP8 on Ampere, DJ guard process names); `asr-eg` (QwenCleo's FastAPI server) as a
+llama-swap model; ctc-forced-aligner in the sources table; three rows in "Still uncertain".
+
+**Kills:** the fixed `--n-cpu-moe 22`; the 46.8 tok/s figure; "QwenCleo covers captions".
+
+**Confidence changes:** Top 10 #4 stays medium (speed evidence better, `--fit` on Windows untested).
+Money path 2 gets one more day of work before the first proposal.
