@@ -1032,3 +1032,16 @@ named without one.
   now says `--n-cpu-moe ~24–26 (or --fit)` and ~10–11 GB, matching #7 after round 37's headless-card caveat.
 
 **Confidence changes:** none.
+
+## Round 45 — Inspiration Canvas: the supported way into Eagle (05:26–05:27 UTC)
+
+**Attack:** 2.5's fallback ("your own exporter is a few dozen lines") rested on a third-party description of Eagle's
+on-disk library layout. Looked for the supported interface instead.
+
+**Found:** Eagle documents an official **local Web API** (v2 at `http://localhost:41595/api/v2/`; requests from
+localhost/127.0.0.1 are trusted without a token; a playground at `/api/v2/playground`; the older v1 `/api/item/list`
+is documented separately). The on-disk `.info/metadata.json` layout is only described by third-party tools. 2.5 now
+says to write the exporter against the Web API while Eagle is open, not against the library folder. Response field
+names were not confirmed (the docs host is unreachable here): the playground shows them on your machine.
+
+**Confidence changes:** none (2.5 has no Top 10 item).
