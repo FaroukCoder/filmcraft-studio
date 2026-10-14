@@ -51,7 +51,9 @@ models:
 
   # The challenger in Day 4's replay (Apache-2.0, native tool calls; ~8 GB at 16K by a VRAM
   # calculator, so expect more at 64K: lower -c if it doesn't fit). File names from
-  # ggml-org/gemma-4-12B-GGUF; the ~175 MB projector lets it read frames too.
+  # ggml-org/gemma-4-12B-GGUF; the ~175 MB projector lets it read frames too. Hermes can't probe the
+  # context through llama-swap and guesses from the ID ("gemma" -> 8,192, which it refuses), so set
+  # model.default to this name and keep model.context_length 65536 while you test it.
   "agent-gemma":
     cmd: |
       ${llama}

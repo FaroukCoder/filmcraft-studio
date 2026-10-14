@@ -1137,3 +1137,27 @@ schema advice against the real converter rather than its docs.
 
 **Confidence changes:** #4 stays medium (nobody has run your prompts), but its schema advice is now tested against
 the real converter.
+
+## Round 50 — Hermes behind llama-swap, run for real (05:52–05:57 UTC)
+
+**Attack:** Day 4 had been checked against Hermes' code, not run. Installed Hermes from `main` (2026-10-13) with
+`uv sync` (it refuses wheel builds by design), pointed `HERMES_HOME` at a throwaway folder, and ran every Day 4
+`config set` line: each wrote exactly the intended key (`tools.tool_search.enabled: "off"`, `local_runtime.enabled:
+false`, `providers.llamacpp.{base_url,model}`, `model.{provider,default,context_length}`).
+
+**Then the integration nobody had tested:** a stand-in llama-server answering `/props` like the real one (n_ctx
+65,536) behind the real llama-swap, and Hermes' own context probe pointed at it.
+- llama-swap routes `GET /props?model=agent` and `/upstream/agent/props`, but answers 404 to `/props` without a
+  model and to `/v1/props?model=…`. Hermes probes `/v1/props` and `/props` **without** a model name, so it can't
+  see the context, and **silently falls back to 256,000 tokens** ("probe-down"). With the server at 64K, Hermes
+  would let a session run past what the server holds before compressing.
+- Worse for the challenger: Hermes' family table maps any ID containing "gemma" to **8,192** (and "gemma-4" to
+  256,000), so a llama-swap model named `agent-gemma` would be guessed at 8K and refused by Hermes' 64K floor.
+- An explicit `model.context_length` wins (returned 65,536 in the same probe), **but only for `model.default`**
+  (`_scope_context_length_to_default_runtime`). Day 4's replay switched only `providers.llamacpp.model`, which would
+  have dropped back to the guess. Fixed: Day 4 now switches both `model.default` and `providers.llamacpp.model`, says
+  why the `context_length` line matters, #7 gains a bullet, the pitfalls table and the YAML comment say it too.
+- Tried per-model `models.llamacpp.<id>.context_window` overrides as an alternative: Hermes flags the key as
+  unrecognised and the probe ignored it. Not recommended.
+
+**Confidence changes:** #7 stays medium, but a silent failure in its exact setup is now caught before you hit it.
