@@ -750,3 +750,16 @@ Gemma 4 12B), in the models table and as a comment on `agent-small` in the llama
 Not a replacement: no evidence yet that it beats Qwen3.6 on your tools.
 
 **Confidence changes:** Top 10 #7 stays medium; it now has a credible no-offload option if RAM or Qwen templates bite.
+
+## Round 32 — money: can the platforms in path 3 pay you? (04:20–04:20 UTC)
+
+**Attack:** path 3 named "Fiverr, Contra" for DJ clip packs abroad. Fiverr's payout from Egypt was verified in
+round 7 (Payoneer); Contra's was never checked, and Contra pays out mainly through Stripe, which historically didn't
+support Egypt.
+
+**Found:** Contra's help pages list Stripe bank transfer, PayPal (2 % fee) and, on one page, Payoneer, for 180–200+
+countries; Egypt isn't named in anything I could read. Stripe's own changelog (2026-03-25) added Egyptian recipient
+bank accounts to Global Payouts, which makes it plausible but not confirmed for Contra.
+
+**Change:** path 3 now says Fiverr is the verified route and Contra needs a test withdrawal first; added a row to
+"Still uncertain". **Kills:** none. **Confidence changes:** path 3 stays low (demand evidence is still thin).
