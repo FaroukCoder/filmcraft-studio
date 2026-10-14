@@ -254,7 +254,7 @@ rerun ten prompts from your direction folder. Then message one collective with t
 | FLUX.2 klein 4B | fp8 files save VRAM on a 3080 Ti but don't run faster (FP8 math needs RTX 40/50); NVFP4 files target RTX 50 | Use the fp8 or GGUF files and the official ComfyUI template |
 | DJ guard | Serato's process name on Windows is unverified (installers carry version numbers) | With Serato open: `python dj_guard.py --once`; if `dj_apps` is empty, add the name from Task Manager → Details with `--watch` |
 
-**Week 2 candidates:** your first real clip end to end: a hand-written plan (cuts from the Day 5 style sheet, the Day 6 grid,
+**Week 2 candidates:** your first real clip end to end (the chain is already tested on synthetic footage against v0.7.2: Serato history → ID captions, two angles → `shot_picker.py` → plan → `plan_to_filmcraft.py` → a 1080×1920 MP4 with cuts on bar lines and the IDs burned in; `test_pipeline_e2e.py`): a hand-written plan (cuts from the Day 5 style sheet, the Day 6 grid,
 rtmlib body centres) through [`plan_to_filmcraft.py`](prototypes/plan_to_filmcraft.py) into the fork, built with
 `CRAFT_FONTS_DIR` so Arabic captions work (Top 10 #9 and #5); then the house
 `look.md` for the collective (2.1), Serato grid write-back to copies (#10).
@@ -372,7 +372,7 @@ few points, use it for paid clips (a day of aligner work saved) and keep QwenCle
 - **Fallback renderer:** DaVinci Resolve Studio 21.1 ($295 one-time) now has a native MCP server; with the plan kept in OTIO it is a one-day switch if FilmCraft blocks you on Windows (see 5b).
 - **Noisy low-light footage** is a bigger "cheap" signal than any graphic. Try ffmpeg's `nlmeans`/`hqdn3d` as an external pre-pass first; DaVinci Resolve Studio's temporal noise reduction ($295 one-time) is the standard paid fix if that is not enough.
 - **Client work: deliver, don't auto-post.** A collective will want to approve posts and will not hand you its account; keep auto-posting for your own channels.
-- Copyright: club clips carry other artists' tracks. Instagram mutes or limits; plan captions and track IDs (Serato history gives you artist and title for free), and keep originals.
+- Copyright: club clips carry other artists' tracks. Instagram mutes or limits; plan captions and track IDs, and keep originals. Serato's history gives you artist and title for free: [`prototypes/track_id_captions.py`](prototypes/track_id_captions.py) turns it (or better, the aligned track times from Top 10 #8) into an "ID: Artist – Title" SRT for the clip's window, skipping loads you never played.
 
 ### 2.2 Hermes + Laya
 

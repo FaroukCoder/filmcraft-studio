@@ -806,3 +806,19 @@ projector (third-party model cards; one reports verified OCR), has no llama.cpp 
 Reel Brain sends frames), and is reportedly not supported by Ollama's projector loader yet. Fully on the card, it is
 the best candidate for "one model for Hermes, the planner and Reel Brain", which would remove model swaps entirely.
 Added to Reel Brain's A/B and to cross-project piece 7. No benchmark numbers claimed.
+
+## Round 36 — the whole Creative Studio chain, end to end (04:29–04:29 UTC)
+
+**Attack:** each prototype passed its own test, but nothing showed their seams fit (the plan JSON the picker writes,
+the SRT the captions tool writes, the plan `plan_to_filmcraft.py` reads).
+
+**Built:** `track_id_captions.py` (Serato history or aligned times → "ID: Artist – Title" SRT for the clip window;
+unplayed loads skipped, sub-1.5 s slivers dropped) with a unit test, and `test_pipeline_e2e.py`: a fake Serato
+`master.sqlite` → history → ID captions; two synced synthetic angles with file offsets → `shot_picker` (drop at bar
+8 forces the crowd) → plan → `plan_to_filmcraft` → MP4, run against the upstream v0.7.2 build. Result: 1080×1920,
+576 frames (19.2 s), cuts at frames 0/192/288 (all on the 48-frame bar grid), "ID: A – Opener" then "ID: B – Tool"
+burned in, the skipped load ignored, set audio present. Looked at a frame: correct 9:16 crop and caption.
+**Caught while building:** testsrc's pure-white areas could have faked the caption check; the test darkens the
+synthetic angles so only captions can be pure white.
+
+**Confidence changes:** Top 10 #5's chain is tested end to end on synthetic footage; still medium for real footage.
