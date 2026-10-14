@@ -536,7 +536,7 @@ the exclusive group keeps one model loaded (asking for `vlm` unloads `agent`), `
 **Confidence changes:** Top 10 #6 stays medium (Windows, DPC latency and thermals untested) but its mechanics are
 now tested rather than read.
 
-## Round 20 — whatstheID: Serato tag format and licences (03:44–03:52 UTC)
+## Round 20 — whatstheID: Serato tag format and licences (03:44–03:46 UTC)
 
 **Attack:** before writing a Serato grid writer, check that the encoder you'd vendor writes what Serato and the
 other parser expect, and what licences the write path drags in.
