@@ -690,3 +690,17 @@ starts, an opt-out, an off-beat tween, an in-out slide vs an out-eased move, and
 
 **Verdict:** stays out of the Top 10 (taste is still low confidence), but it now has a tool and a test that could
 bring it back.
+
+## Round 28 — the shared batch queue the report kept asking for (04:11–04:14 UTC)
+
+**Attack:** Top 10 #2 and Reel Brain both say "checkpoint every batch per item, retry on connection refused, wait
+for the DJ lock", and nothing provided it. Long GPU runs crashing the PC is one of your stated pain points.
+
+**Built:** `prototypes/gpu_queue.py`: SQLite (WAL, synchronous=FULL), one row per item, `running` rows requeued on
+start, `dj_guard.gpu_allowed()` checked before each item, exponential backoff, parked failures with their error,
+`status` for a nightly report (Hermes cron's no-agent mode can run it). Test: 9 done / 1 parked; a transient
+`ConnectionRefusedError` retried once; two waits for the DJ lock; and a real hard crash (a worker process killed
+with `os._exit` in the middle of an item) followed by a restart that redoes exactly that one item. Passed first run.
+
+**Confidence changes:** none to the Top 10 (it implements #2's step 4); Reel Brain's crash pain point now has a
+concrete, tested mitigation.
