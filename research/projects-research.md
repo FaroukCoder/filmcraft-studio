@@ -159,7 +159,11 @@ laya-train --data routes.csv --text-column text --label-column label --base mult
 laya-train --data routes.csv --text-column text --label-column label --base multilingual --out laya-routes --loss soft-ce --epochs 16 --seed 1
 ```
 Read the optimizer-update budget the dry run prints and set `--epochs` so it lands near a few hundred updates (Laya #963: the
-4-epoch default collapses on small data); run a second `--seed` before trusting the result. (`laya` 0.4.6 on PyPI installs the `laya-train` command.)
+4-epoch default collapses on small data; with ~2,000 rows the default batch of 64 gives 128 updates at 4 epochs and ~512 at 16);
+run a second `--seed` before trusting the result. (Checked in round 40 by installing `laya` 0.4.6: `laya-train` has these
+flags, `--base multilingual` resolves to `convaiinnovations/laya-multilingual`, and the CSV `laya_eval.py` exports parses
+into Laya's choice-question format with Arabic intact. The dry run downloads the tokenizer, so it needs Hugging Face access.
+The multilingual checkpoint ships with no fitted temperatures, so its raw confidences mean little until this calibrates them.)
 
 **Day 2 (Reel Brain loops, Top 10 #4).** Pick the 20 reels that failed most recently:
 ```powershell
@@ -202,9 +206,11 @@ hermes config set model.provider llamacpp
 hermes config set model.default agent
 hermes config set model.context_length 65536
 ```
-(Key names from Hermes' `local-models.md`, `tool-search.md` and CLI reference; `local_runtime.enabled false` stops Hermes
-starting its own llama.cpp, so llama-swap stays the only GPU owner. Hermes probes `:8080` for a llama-server by default,
-which is where the example llama-swap listens.) Keep the old Ollama setup as a second profile (`hermes profile`), replay 20
+(Checked in round 40 against Hermes' own code on `main`, not only its docs: every key exists, `config set` keeps `off` as
+a string where the default is a string, turns a plain-string `model` into a section before writing `model.*`, and drops
+the old provider's `base_url` when `model.provider` changes. `local_runtime.enabled` is already `false` by default; the
+line is a guard in case setup turned on Hermes' own llama.cpp, so llama-swap stays the only GPU owner. Hermes probes
+`:8080` for a llama-server by default, which is where the example llama-swap listens.) Keep the old Ollama setup as a second profile (`hermes profile`), replay 20
 logged requests on it, on Qwen3.6-35B-A3B and on Gemma 4 12B (`agent-small` with its GGUF), and keep the one with the
 fewest failed tool turns.
 
@@ -252,7 +258,7 @@ rerun ten prompts from your direction folder. Then message one collective with t
 | llama.cpp | The `llama-b<N>-bin-win-cuda-…-x64.zip` has no CUDA runtime | Unzip the matching `cudart-llama-bin-win-cuda-…-x64.zip` into the same folder. Builds exist for CUDA 12.4 and 13.x; 13.x needs an R580-or-newer driver, so take 12.4 if your driver is older |
 | llama.cpp memory | `--fit` (on by default in recent builds) sizes offload to *free* VRAM; Windows' desktop holds some | `--fit-target 1536` for margin, `-np 1` for one slot; read the log line that reports the offload |
 | Ollama | Default context is 4K tokens on cards under 24 GB ([docs](https://docs.ollama.com/context-length)) | Set `num_ctx` per request or `OLLAMA_CONTEXT_LENGTH` on the server, not on `ollama run` |
-| Hermes | Refuses a local endpoint serving < 64K context; terminal tool runs through Git Bash | `-c 65536` in llama-swap and the same `context_length` in Hermes; install Git for Windows. Native Windows 10 is a Tier 1 platform via `install.ps1` (the MSIX app needs Windows 11 22H2) |
+| Hermes | Refuses a local endpoint serving < 64K context; terminal tool runs through Git Bash; **`pip install hermes-agent` is an unsupported install and PyPI stops at 0.19.0** (GitHub is at v0.22.0), so `hermes update` can't bring a pip install to the 0.21.2 Day 0 asks for | `-c 65536` in llama-swap and the same `context_length` in Hermes; install Git for Windows. Install with `install.ps1` (native Windows 10 is Tier 1; the MSIX app needs Windows 11 22H2); if `hermes --version` says 0.19 or older, reinstall that way |
 | faster-whisper / whisperX | Needs cuBLAS + cuDNN 9 for CUDA 12; pip doesn't supply them on Windows | Its README points to Purfview's whisper-standalone-win archive of NVIDIA DLLs; put them on `PATH` ([README](https://github.com/SYSTRAN/faster-whisper)) |
 | QwenCleo-ASR | Streaming needs vLLM nightly, which doesn't run on native Windows | Use the chunked transformers path (its own FastAPI server, `asr-eg` in the llama-swap example); vLLM only under WSL2 |
 | rtmlib (pose) | `onnxruntime-gpu` needs CUDA + cuDNN DLLs; PyPI GPU wheels are built for CUDA 13 from ORT 1.27 | Start on CPU `onnxruntime` (offline pose on a few clips is fine on CPU); if too slow, `pip install onnxruntime-gpu[cuda,cudnn]` and keep its cuDNN in step with torch's in the same process |

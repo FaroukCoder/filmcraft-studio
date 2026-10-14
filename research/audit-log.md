@@ -926,3 +926,29 @@ both librosa and ffmpeg decoding, so our decoders agree; the ~26 ms Serato offse
 `downbeat_phase` found phase 0 with a clear backbeat. All 17 prototype tests pass, including the real llama-swap one.
 
 **Confidence changes:** none in the Top 10; #10's anchor now rests on one real recording instead of none.
+
+## Round 40 — run the first week's commands against the real tools (05:04–05:17 UTC)
+
+**Attack:** the brief asks for "a first-week plan with exact commands". Days 1, 3 and 4 had been checked against docs;
+this round checked them against the tools' own code.
+
+- **Day 1 (Laya):** installed `laya` 0.4.6 from PyPI. `laya-train` has every flag used (`--data`, `--text-column`,
+  `--label-column`, `--base`, `--out`, `--dry-run`, `--loss soft-ce`, `--epochs`, `--seed`); `--base multilingual`
+  resolves through the same alias table as the Router (`convaiinnovations/laya-multilingual`); the CSV that
+  `laya_eval.py --export-csv` writes parses with Laya's own `read_data` into a choice question over the labels, Arabic
+  intact. Laya's numbers for the epochs advice: default effective batch 64, so ~2,000 rows give 128 optimizer updates
+  at 4 epochs and ~512 at 16. Found in Laya's source: the multilingual checkpoint ships with **no fitted
+  temperatures**, so its raw confidences are uncalibrated until laya-train fits them (added to Day 1). Not run: the
+  dry run itself, which downloads the tokenizer from Hugging Face (blocked here).
+- **Day 3:** llama-swap's Go flags accept `--config`/`--listen`; `dj_guard.py` and `vlm_json_guard.py` flags match the
+  plan, and `--url http://127.0.0.1:8080` is right because the script appends `/v1/chat/completions` itself.
+- **Day 4 (Hermes):** read `hermes_cli/config.py` and `config_defaults.py` on `main` (2026-10-13; v0.22.0 is tagged).
+  Every key exists; `config set` keeps `off` verbatim where the default is a string (`tools.tool_search.enabled`
+  defaults to `"auto"`), coerces `false` for the boolean `local_runtime.enabled` (already `false` by default, so that
+  line is a guard, now said), converts a plain-string `model` into a section before writing `model.*`, and drops the
+  old provider's `base_url` when `model.provider` changes. Correct as written.
+- **New pitfall:** Hermes' platform-support page lists **PyPI installs as unsupported**, and PyPI stops at 0.19.0
+  while GitHub is at v0.22.0, so a pip-installed Hermes can't reach the 0.21.2 that Day 0 requires. Added to the
+  Windows pitfalls table: install with `install.ps1`.
+
+**Confidence changes:** none; Day 1 and Day 4 move from "checked against docs" to "checked against code".
