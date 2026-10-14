@@ -631,7 +631,7 @@ tag would hide `research/` (it only exists on this branch).
 **Open:** the seam was tested on the fork's own base (0.6.0 lineage), not on v0.7.2, which the report tells you to
 sync to. A v0.7.2 build is running to re-test it.
 
-## Round 25 — canvas imports, Cairo prices, and the bounded schema that wasn't (03:57–04:05 UTC)
+## Round 25 — canvas imports, Cairo prices, and the bounded schema that wasn't (03:57–03:59 UTC)
 
 - **Inspiration Canvas:** found **EaglePack Importer**, an Obsidian community plugin that turns an Eagle `.eaglepack`
   into one note per item (image embedded) plus a gallery note. Added as a lead, not a recommendation: its source
