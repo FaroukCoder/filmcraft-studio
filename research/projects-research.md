@@ -416,12 +416,12 @@ few points, use it for paid clips (a day of aligner work saved) and keep QwenCle
 - Gemma 4 31B (Hermes' docs call it the most reliable local tool-caller) on 12 GB: ~20 GB, will not fit.
 
 **Models**
-| Use | Model | VRAM / RAM |
-|---|---|---|
-| Daily driver (≥32 GB RAM) | Qwen3.6-35B-A3B Q4 + `--n-cpu-moe ~24` | ~11 GB VRAM + ~12 GB RAM |
-| Daily driver (16 GB RAM), or the challenger | Qwen3.5-9B Q5/Q6, or Gemma 4 12B Q4 (QAT) | ~7–9 GB VRAM / ~8 GB at 16K (estimate) |
-| Router | Laya (`laya` 421M ModernBERT-large / `laya-multilingual` 322M mmBERT-base), fine-tuned | CPU, 0.4–0.8 s with pinned threads |
-| Router baseline | EmbeddingGemma-300M + logistic regression | CPU, milliseconds |
+| Use | Model | Licence | VRAM / RAM |
+|---|---|---|---|
+| Daily driver (≥32 GB RAM) | Qwen3.6-35B-A3B Q4 + `--n-cpu-moe ~24–26` (or `--fit`) | Apache-2.0 | ~10–11 GB VRAM + ~12 GB RAM |
+| Daily driver (16 GB RAM), or the challenger | Qwen3.5-9B Q5/Q6, or Gemma 4 12B Q4 (QAT) | Apache-2.0 / Apache-2.0 | ~7–9 GB VRAM / ~8 GB at 16K (estimate) |
+| Router | Laya (`laya` 421M ModernBERT-large / `laya-multilingual` 322M mmBERT-base), fine-tuned | Apache-2.0 | CPU, 0.4–0.8 s with pinned threads |
+| Router baseline | EmbeddingGemma-300M + logistic regression | Gemma Terms of Use | CPU, milliseconds |
 
 **Open risks:** Qwen 3.5/3.6 tool-call templates are fragile across servers (Ollama [#14493](https://github.com/ollama/ollama/issues/14493), Hermes #29677; on llama-server pass `--jinja` plus the right `--chat-template-file`). Hermes' 48k open issues/PRs means fast churn: pin a version.
 
@@ -452,12 +452,12 @@ few points, use it for paid clips (a day of aligner work saved) and keep QwenCle
 - instagrapi for collecting saves (Dopamine uses it; it logs into your account through a private API and risks a ban). Use Instagram's own "Download your information" export (JSON) for the list of saved items, then fetch only what you need. **The export carries your folders:** `saved_posts.json` lists the saves and `saved_collections.json` lists each collection by name with its posts, so your collection names are the labels `collections_probe.py` needs (two open-source parsers, [instasaved](https://github.com/max-lutz/instasaved/pull/26) and [TikTokAnalyzer](https://github.com/danfox127-dotcom/TikTokAnalyzer/pull/20), read it that way; check field names on your own export). **Fix Meta's text encoding before anything reads it:** the export writes UTF-8 bytes as separate characters, so Arabic captions and collection names arrive garbled; re-decode each string with `s.encode('latin-1').decode('utf-8')` (checked on escaped Arabic; wrap it in try/except and keep the original when it raises, which a string that was already right can). Posts can appear in a collection but not in `saved_posts.json`; keep them. If yt-dlp needs your cookies to fetch a reel, throttle it like a person (`--sleep-requests 2 --sleep-interval 5 --max-sleep-interval 20`) and run the backlog over several nights rather than one: a burst of hundreds of logged-in requests is what gets accounts checkpointed.
 
 **Models**
-| Use | Model | VRAM |
-|---|---|---|
-| Transcript (English) | faster-whisper large-v3 (MIT) int8 | ~3–5 GB |
-| Transcript (Egyptian Arabic / mixed) | QwenCleo-ASR 1.7B (Apache-2.0) | ~4–6 GB |
-| Frames → notes | Qwen3-VL-8B or Qwen3.5-9B Q5 + mmproj | ~7–8 GB |
-| Collections | EmbeddingGemma-300M + logistic head | CPU |
+| Use | Model | Licence | VRAM |
+|---|---|---|---|
+| Transcript (English) | faster-whisper large-v3, int8 | MIT (code and weights) | ~3–5 GB |
+| Transcript (Egyptian Arabic / mixed) | QwenCleo-ASR 1.7B, or Cohere Transcribe Arabic 2B | Apache-2.0 / Apache-2.0 | ~4–6 GB |
+| Frames → notes | Qwen3-VL-8B Q6_K + mmproj at 8K context (Top 10 #4), against GLM-4.6V-Flash and Gemma 4 12B | Apache-2.0 / MIT (per listings) / Apache-2.0 | ~9 GB |
+| Collections | EmbeddingGemma-300M + logistic head | Gemma Terms of Use | CPU |
 
 ### 2.4 whatstheID
 
@@ -512,7 +512,7 @@ What you already have (from the repo): shazamio + AudD, your own landmark finger
 3. **One vault, one set of conventions:** the Obsidian vault is the knowledge store for everything: Claude Code, Reel Brain and the canvas reach it through one MCP server (MCPVault), Hermes through its bundled `obsidian` and `llm-wiki` skills over the same files. You already write to the vault via `learn-to-vault` / claude-obsidian (Karpathy LLM-wiki pattern); don't add a second memory database that drifts from it. A skill costs Hermes one index line until used; MCP tool schemas are in every prompt.
 4. **One verification module** for "does this search hit really match": whatstheID's `verify.py` rules reused for Reel Brain's tool→repo links.
 5. **Shared audio analysis:** whatstheID's comb-filter tempo and key code, Beat This, and Serato readers serve both whatstheID and Creative Studio.
-6. **Shared embeddings:** EmbeddingGemma for the Laya baseline, Reel Brain's collections and canvas search.
+6. **Shared embeddings:** EmbeddingGemma for the Laya baseline, Reel Brain's collections and canvas search. Licence: the **Gemma Terms of Use**, not Apache (unlike Gemma 4): commercial use is allowed, but Google's prohibited-use policy applies and can change. Fine for your own tools; if you ever ship the embeddings inside something you sell, read the terms or swap in an Apache-2.0 embedder.
 7. **One vision-language model where possible (candidate: Gemma 4 12B, see 2.3):** the Hermes agent model doubles as Creative Studio's planner, and if it wins Reel Brain's A/B it does that job too (2.3). Fewer models means fewer swaps on one card.
 8. **One security rule across the vault (round 17).** Reel Brain writes text that strangers wrote (captions, transcripts, on-screen text) into the vault, and Hermes reads the vault with a shell, MCP tools and a Telegram front door. That is the classic indirect prompt-injection path. Hermes' defaults already defend most of it (checked in its code, round 41): the gateway denies everyone until an allowlist is set, `approvals.mode` is `smart`, and cron, single-query and unattended runs deny dangerous commands. So the rule is mostly *don't loosen them*: `TELEGRAM_ALLOWED_USERS` = your ID only (the QR setup writes it), never `/yolo` or `GATEWAY_ALLOW_ALL_USERS` on the gateway; give agents that only need to read the vault a second [MCPVault](https://github.com/bitbonsai/mcpvault) instance started with `--read-only`; keep reel notes in their own folder and write "untrusted content from a saved reel" at the top of each one. A repo found in a reel is a lead, not an install: installing it is always your decision, never a plan step an agent acts on alone.
 

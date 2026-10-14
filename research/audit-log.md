@@ -1015,3 +1015,20 @@ check them on your own export.
   sites are unreachable; OpenCV's pedestrian sample isn't a DJ booth), so it stays "synthetic only".
 
 **Confidence changes:** none.
+
+## Round 44 — licence flags, every model table (05:25–05:26 UTC)
+
+**Attack:** "Flag every license." The 2.1 model table had a licence column; 2.2 and 2.3 didn't, and two models were
+named without one.
+- **EmbeddingGemma-300M is not Apache.** It is under the **Gemma Terms of Use** (commercial use allowed, but Google's
+  prohibited-use policy applies and can change; a notice is required in derivatives). Gemma 4 moved to Apache-2.0;
+  EmbeddingGemma did not. Flagged in both tables and in cross-project piece 6, with "swap in an Apache-2.0 embedder if
+  you ever ship it inside something you sell".
+- **Cohere Transcribe Arabic** (2B, July 2026) checked: Apache-2.0 per Cohere's own announcement; 25.87 WER on the
+  Hugging Face Arabic ASR leaderboard (Cohere's figure). Added to the Reel Brain table beside QwenCleo.
+- **Qwen3-VL-8B:** Apache-2.0 per Voxel51's and Roboflow's model pages (official card unreachable here).
+- **Contradiction fixed on the way:** the Reel Brain table still said "Q5 + mmproj, ~7–8 GB" for the vision model,
+  against Top 10 #4's Q6_K at 8K context (~9 GB, round 33). Now Q6_K, with the A/B candidates named. The agent table
+  now says `--n-cpu-moe ~24–26 (or --fit)` and ~10–11 GB, matching #7 after round 37's headless-card caveat.
+
+**Confidence changes:** none.
