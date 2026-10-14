@@ -782,7 +782,7 @@ piece; caption timing vs money path 2; Hermes' 64K floor vs the agent's `-c 6553
 
 **Confidence changes:** none, but Top 10 #4 would have produced an out-of-memory error on its first Q8 try.
 
-## Round 34 — Hermes already ships the vault layer (04:24–04:23 UTC)
+## Round 34 — Hermes already ships the vault layer (04:22–04:23 UTC)
 
 **Attack:** "recommending what you already have is a flaw". The report sent Hermes to the vault through an MCP
 server (MCPVault). Read Hermes' bundled skills: `obsidian` (filesystem-first read/search/create/edit, vault path from
@@ -797,7 +797,7 @@ skills cost nothing until used; corrected to "one index line".
 
 **Confidence changes:** none; one less moving part in Hermes' prompt.
 
-## Round 35 — newer VLMs for short video (04:27–04:23 UTC)
+## Round 35 — newer VLMs for short video (04:23–04:23 UTC)
 
 **Attack:** "better alternatives" for Reel Brain's VLM at ≤ 12 GB. A broad search found research systems (Tempo,
 LLaVA-OneVision-2) without local builds or comparisons: nothing beats the existing candidates with evidence.
@@ -807,7 +807,7 @@ Reel Brain sends frames), and is reportedly not supported by Ollama's projector 
 the best candidate for "one model for Hermes, the planner and Reel Brain", which would remove model swaps entirely.
 Added to Reel Brain's A/B and to cross-project piece 7. No benchmark numbers claimed.
 
-## Round 36 — the whole Creative Studio chain, end to end (04:29–04:29 UTC)
+## Round 36 — the whole Creative Studio chain, end to end (04:24–04:29 UTC)
 
 **Attack:** each prototype passed its own test, but nothing showed their seams fit (the plan JSON the picker writes,
 the SRT the captions tool writes, the plan `plan_to_filmcraft.py` reads).
@@ -822,3 +822,39 @@ burned in, the skipped load ignored, set audio present. Looked at a frame: corre
 synthetic angles so only captions can be pure white.
 
 **Confidence changes:** Top 10 #5's chain is tested end to end on synthetic footage; still medium for real footage.
+
+## Round 37 — third link and claim check (04:30–04:37 UTC)
+
+**Attack:** every link added since round 15, plus every number in the Top 10 that rested on one source.
+
+**Links:** all 50 GitHub repos resolve (`git ls-remote`). Issue/PR states re-read on GitHub: FilmCraft #1475 open
+and PR #1478 open (a maintainer asked for per-font coverage caching on 13 Oct, and the author pushed it; note that
+#1475 is titled for graphics layers, and our own test is what shows the same fallback hits burned-in captions);
+Ollama #14493 open (latest reports Sep 2026, no confirmed fix for registry `qwen3.5` models); Laya #963 open
+(early-stopping PR #982 awaits changes; the collapse warning and update-budget print shipped); Hermes #110442 open
+(rename PR #110452 open) and #129440 open (the "1 of 23" figure is in it). Stripe's 2026-03-25 changelog does add
+Egyptian recipient bank accounts (`eg_bank_account`) to Global Payouts; Egypt is on Google's Gemini API region list;
+the Qwen3-ForcedAligner language list (11, no Arabic) was re-read on PyPI. Stars re-read for Laya (32.8k), OpenMontage
+(68.0k, AGPL), HyperFrames (63.0k) and llama-swap (5.9k, WinGet package community-maintained). Eagle is still
+US$34.95 one-time. FLUX.2 klein 4B (Apache-2.0) vs 9B (non-commercial), Z-Image-Turbo (Apache-2.0) and
+Qwen-Image-2512 (Apache-2.0) all re-confirmed. Laya's README does say "the base checkpoints are near chance on
+typed-decisions zero-shot" (in its Honest limits section; the top of the README says they "work zero-shot").
+
+**What broke**
+- **ElevenLabs Scribe price was stale:** the API pricing page lists Scribe v1/v2 batch at **$0.22/hour** (realtime
+  $0.39); my $0.40 came from older pages. Fixed in 2.1 and the models table. Egyptian is listed among its accents;
+  still no Egyptian-dialect error rate anywhere.
+- **Gemma 4 12B numbers had no source in the report, and one had none anywhere.** The "~7.8 GB at 16K" is a vendor
+  VRAM *calculator* (aliteq), not a measurement; the "~90 tok/s" could not be found again in any source and was
+  removed. Added ggml-org's GGUF repo and the calculator as sources; the 12B's release (3 June 2026, the "Unified"
+  size) is from secondary write-ups.
+- **The 38.9 tok/s 3060 figure was measured on a headless card.** InsiderLLM notes a card driving the desktop loses
+  ~0.5–1 GB and can OOM at `--n-cpu-moe 24`. Your 3080 Ti drives your monitors, so the report now says to start one
+  or two layers higher or let `--fit` (1.5 GB target) choose.
+- **The "~45 tok/s on 16 GB RAM" report was only ever read through a search snippet** (X doesn't load here), and
+  the audit log never said so. Marked second-hand in the report.
+- Timeline-Bench numbers now match two indexes of the arXiv HTML and the project site (26.8 % = 15 of 56, 95 %
+  interval 15.8–40.3 %; 562 of 771 failed runs failed only the quality test); the interval was added.
+- Audit-log housekeeping: rounds 34–36 had start times later than their end times; corrected from the commit times.
+
+**Confidence changes:** none in the Top 10. #7 gets a Windows-specific caveat; Scribe gets cheaper.
