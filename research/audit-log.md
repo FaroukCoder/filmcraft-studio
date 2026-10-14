@@ -858,3 +858,40 @@ typed-decisions zero-shot" (in its Honest limits section; the top of the README 
 - Audit-log housekeeping: rounds 34–36 had start times later than their end times; corrected from the commit times.
 
 **Confidence changes:** none in the Top 10. #7 gets a Windows-specific caveat; Scribe gets cheaper.
+
+## Round 38 — Serato write-back: what rb2serato doesn't cover, built and tested (04:38–04:53 UTC)
+
+**Attack:** Top 10 #10 said rb2serato is "the risky half of whatstheID's 4c plan, already done". Read its writer and
+serato-tools' against whatstheID's own code instead of its README.
+
+**What broke**
+- **FLAC isn't covered by either tool.** rb2serato's `tagwriter.py` handles MP3/AIFF/WAV (ID3) and M4A; serato-tools'
+  writer handles `.mp3`/`.aiff` and only *reads* FLAC. whatstheID's default export format is FLAC (`config.py`). So
+  for most of your files the "already done" half was not done. Serato's FLAC layout is documented in Holzhaus/
+  serato-tags (MIT): Vorbis comments `SERATO_BEATGRID` / `SERATO_MARKERS_V2`, unpadded base64 with 72-char lines.
+- **whatstheID has no grid anchor.** It stores BPM and cue times, not where a beat falls; `_comb_tempo` computes the
+  best phase for every candidate tempo and discards it. And a 0.01 BPM error (its measured mean vs Serato) is ~27 ms
+  of drift by the end of a six-minute track.
+- **rb2serato's writer can't run on Windows as is:** `subprocess.run(["cp", "-c", ...])` raises FileNotFoundError
+  before its copy fallback; its audio digest hashes a whole FLAC (any tag change looks like damage).
+- **MP3 timing:** Mixxx's Serato importer (GPL; read for the numbers only) corrects Serato's MP3 cue and grid
+  positions by −26 ms at 44.1 kHz / −24 ms at 48 kHz for FFmpeg/libmad decoding (other values under Core Audio,
+  mixxx#2119). FLAC and WAV get no offset.
+
+**Built:** `prototypes/serato_writeback.py` + test. Measured first: a comb phase on a librosa onset envelope lands a
+constant 31 ms late at hop 512 (22 ms at 256, 18 at 128; ±0.5 ms across 124–148 BPM). So the anchor is refined to
+each kick's attack (zero-phase 150 Hz low-pass, 50 % of the rise: −0.15 ms on synthetic kicks) and one line is fitted
+through every attack, which corrects the BPM as well. Result on 180 s of synthetic techno at 132.004 BPM with rolling
+16th bass, analysed as 132.0: BPM 132.004, anchor −0.04 ms at both ends; +1 BPM/min drift refused (19.7 ms rms).
+Write path: rb2serato's `seratotags.py` (loaded from a path, MIT) for the bytes, mutagen for the container, copy →
+tag → audio-hash check → `os.replace`, Windows "file open in Serato" handled. MP3, FLAC and WAV: audio unchanged,
+grid and three cues read back by our decoder and by **serato-tools** (independent parser) for MP3 and FLAC; a
+damaging write refused with the original untouched; NaN/0/1000 BPM and negative anchors refused. All 17 prototype
+tests pass (llama-swap one SKIPs without its binary).
+
+**Licence:** the write path imports mutagen (GPL-2.0+), which the prototypes README had promised to keep out of the
+fork. Kept as an optional run-time import (no mutagen code, not in `requirements.txt`, anchor half runs without
+it), the README now says so plainly, and the report says the script belongs in whatstheID.
+
+**Confidence changes:** #10 stays medium (nothing has been loaded by Serato), but its premise is corrected and its
+first step now covers FLAC, a known track, and the MP3 offset. Three new rows in "Still uncertain".

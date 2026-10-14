@@ -21,6 +21,7 @@ and should run on Windows, but **nobody has run them on Windows yet**.
 | `laya_eval.py` | #3 | Accuracy per route, confusions, calibration (ECE), confidence gate, a cheap baseline on the same labels; exports a CSV for `laya-train` or Laya's JSONL cases | Router right 41 % at ~0.9 confidence: ECE 0.49 flagged; TF-IDF baseline 100 % on the learnable synthetic routes |
 | `beat_lint.py` | Creative Studio (2.1, house look) | Lints a HyperFrames composition against the beat grid (clip starts/ends, bar-line titles, relative starts, GSAP tween positions) and flags in-out slides and typed-out text | Synthetic composition at 150 BPM: off-beat clip reported 150 ms after its beat, bar miss, off-beat tween, in-out slide and typewriter found; on-grid clips, an opt-out and an out-eased move pass |
 | `shot_picker.py` | Creative Studio (2.1) | Which synced camera angle per bar: sharpness, exposure, motion, strobes per bar; dynamic programming with cuts only on bar lines, min/soft-max shot length, crowd on the drop; writes a plan for `plan_to_filmcraft.py` | Two synthetic offset angles at 150 BPM (one dark 4 bars, one blurred 6): avoids both, crowd on the drop, offsets mapped; equal scores give 4-bar shots |
+| `serato_writeback.py` | #10 (whatstheID) | Grid anchor + BPM fitted to every kick attack over the whole track (refuses drifting tempo); rb2serato's encoders for `Serato BeatGrid`/`Markers2`/`Markers_`; **FLAC** Vorbis-comment writer (neither rb2serato nor serato-tools writes FLAC); copy → tag → audio-hash check → replace, Windows-safe; MP3 offset option; `compare` vs Serato's own grids | 180 s synthetic techno at 132.004 BPM with rolling bass, analysed as 132.0: BPM 132.004, anchor −0.04 ms at start and end; +1 BPM/min drift refused (19.7 ms rms). MP3/FLAC/WAV: audio bytes unchanged, grid and 3 cues read back by our decoder and by serato-tools (MP3, FLAC); damaged-audio write refused, original untouched; NaN/0/1000 BPM refused |
 | `track_id_captions.py` | Creative Studio, #8 | Serato history (or aligned track times) → "ID: Artist – Title" SRT for a clip's window; unplayed loads skipped, slivers dropped | Unit test on a 5-track history; also part of the end-to-end test below |
 | `test_pipeline_e2e.py` | #5 | The chain: fake Serato history → ID captions; two synced angles → `shot_picker` → plan → `plan_to_filmcraft` → MP4 | Against upstream v0.7.2: 1080×1920, 19.2 s, cuts on bar lines (frames 0/192/288), both ID captions burned in, audio present. SKIP without a build |
 | `plan_to_filmcraft.py` | #5 | Edit plan (JSON) → your FilmCraft fork, headless over MCP: 9:16 sequence, cuts from two cameras, L1 reframe written as Motion anchor keyframes, set audio, captions, H.264 export | Real `filmcraft-cli` build, two synthetic cameras, noisy gappy detections: cuts on the planned frames (90/135/225), subject fully in frame 100 % of reframed frames (centre crop: 34 %), 8–14 keyframes per shot, captions burned in, audio present. Test prints SKIP without a build |
@@ -29,8 +30,11 @@ and should run on Windows, but **nobody has run them on Windows yet**.
 
 **Licences:** every dependency in `requirements.txt` is permissive (numpy, scipy, scikit-learn, soundfile, psutil,
 httpx: BSD; librosa: ISC; PySceneDetect: BSD-3; OpenCV: Apache-2.0; pydantic, PyYAML: MIT), so these scripts can live
-in the MIT/Apache fork. Serato tag writing is deliberately not here: the Python tag libraries (mutagen, and serato-tools
-on top of it) are GPL-2.0-or-later, so that code belongs in whatstheID.
+in the MIT/Apache fork. The one exception is `serato_writeback.py`: its write path imports mutagen (GPL-2.0-or-later)
+at run time. It contains no mutagen code, mutagen is not in `requirements.txt`, and its anchor half runs without it, but
+the script belongs in whatstheID (which already uses mutagen and isn't distributed): copy it there and delete it from the
+fork if you want the fork free of GPL dependencies too. serato-tools is MIT but needs mutagen as well; rb2serato's
+`seratotags.py`, which it loads for the tag bytes, is MIT and stdlib-only.
 
 ## Setup (Windows, PowerShell, one command per line)
 
