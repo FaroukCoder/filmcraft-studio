@@ -48,7 +48,7 @@
 - **Pitfalls named in the README and open issues:** don't use `true`/`false` or `yes`/`no` as `choice` labels (the model follows the label word); negated requests can flip (e.g. "don't cancel" → `cancel_account` at p=0.9998); more than ~20 options per question get truncated, so split coarse/fine; the notebook's fixed 4-epoch default **collapses on small datasets** ([#963](https://github.com/NandhaKishorM/laya/issues/963), open), so fewer than a few thousand labels means fewer epochs and a held-out check; serving a custom checkpoint through the `Router` is still an open request ([#919](https://github.com/NandhaKishorM/laya/issues/919)), so load your fine-tune directly in single-model mode.
 - **Confidence: high** for "measure and fine-tune" (it is what the project's own maintainers say); medium on how much it gains on *your* routes.
 - **Could fail if:** labels are too few or too noisy, or your messages mix Arabic and English in ways the multilingual checkpoint reads poorly. Kaggle means uploading your messages to Google: strip anything private first, or train on CPU.
-- **First step:** export 200 recent routing decisions with the message text and mark each right or wrong. One evening.
+- **First step:** export 200 recent routing decisions with the message text and mark each right or wrong. One evening. Score them with [`prototypes/laya_eval.py`](prototypes/laya_eval.py) (accuracy per route, calibration, a confidence gate, and a cheap baseline on the same labels); it also exports Laya's training-row format.
 
 ### 3. Fix Reel Brain's looping JSON at the source: image-token budget, sampling, quant, bounded schema
 - **Why:** two open issues match your stack closely. Ollama [#13084](https://github.com/ollama/ollama/issues/13084): Qwen3-VL 4B/8B on **Windows with an RTX 3080** produces "highly unsorted contents" or repeats short sentences once the prompt exceeds `num_ctx`; the reporter's images were 3236×2160 and the logs said "truncating input prompt". [QwenLM/Qwen3-VL#1611](https://github.com/QwenLM/Qwen3-VL/issues/1611): Qwen3-VL loops across runtimes (Transformers, Ollama, LM Studio, llama.cpp), more with **greedy decoding** and **low (4-bit) quants**; the same author ran GLM-4.6V-Flash on 500 cases with zero loops. A Qwen-VL image costs roughly `h × w / (32 × 32)` tokens, so a full-resolution 1080×1920 frame is ~2,000 tokens and eight of them ~16,000.
@@ -56,7 +56,7 @@
 - **Correction from round 8:** earlier drafts blamed Ollama ignoring repetition penalties. That bug was real ([#15783](https://github.com/ollama/ollama/issues/15783)) but was **closed in July 2026 as obsoleted by Ollama 0.30.0, which moved its engine onto llama.cpp**. It only matters if your Ollama is older than 0.30: check `ollama --version`, and update if so. Ollama stays fine for this job; moving it behind llama-swap (Top 10 #6) is about sharing the GPU, not about JSON.
 - **Confidence: medium.** The issues match your hardware and model; nobody has run your prompts.
 - **Could fail if:** the prompts themselves invite open-ended lists or the model needs thinking to read the frames. The bounded schema and the GLM A/B cover those.
-- **First step:** record your Ollama version and the prompt-token count for the 20 reels that failed most recently, then rerun them with downscaled frames and the recommended sampling.
+- **First step:** record your Ollama version and the prompt-token count for the 20 reels that failed most recently, then rerun them with downscaled frames and the recommended sampling. [`prototypes/vlm_json_guard.py`](prototypes/vlm_json_guard.py) does all of that against Ollama or any OpenAI-compatible server.
 
 ### 4. Move Hermes to llama.cpp with expert offload, and cut the tool list by hand
 - **Why:** Hermes now ships a managed llama.cpp runtime that places MoE expert weights in system RAM first and keeps attention and KV cache on the GPU, with a guaranteed ≥64K context and 15-minute idle unload ([local-models docs](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/local-models.md)). On a 12 GB RTX 3060 **with 32 GB of DDR4**, users report Qwen3.6-35B-A3B generating at **28–47 tok/s** depending on `--n-cpu-moe` (a May 2026 r/LocalLLaMA sweep: ~46.8 tok/s at `-ncmoe 18` in llama-bench; InsiderLLM, Sep 2026: 28 at a default setting, 39 tuned); your 3080 Ti has ~2.5× the memory bandwidth, so expect at least that. Hermes' own docs say prefill of the system prompt plus tool schemas dominates first-token time on local models, so the fixed prompt is the first thing to shrink: `hermes prompt-size` shows it, `hermes tools` and per-profile toolsets cut it.
@@ -73,7 +73,7 @@
 - **Do:** collect ~40 clips (analysis only, never re-published). Run shot detection (PySceneDetect, BSD-3, or FilmCraft's `clip.sceneEditDetection`) and beat tracking (Beat This) on each. Output: cuts per clip, shot length in beats, % of cuts on a downbeat/bar/phrase line, where the drop sits, how long the first shot holds, when text appears and what it says.
 - **Hypothesis to test:** many of these clips are one or two fixed-camera shots where the edit is mostly *selection* (start a few bars before the drop, end on the reaction) plus a track-ID caption, not rapid cutting. If true, alternating crowd/DJ cuts is the wrong default.
 - **Confidence: high** that it pays off; the numbers it finds are unknown by definition.
-- **First step:** a 50-line script over a folder of clips → CSV; look at the medians.
+- **First step:** run [`prototypes/analyze_reference_clips.py`](prototypes/analyze_reference_clips.py) `--strobe-safe` over a folder of ~40 clips; look at the medians. Use `--strobe-safe` on club footage: in the synthetic test, strobes inside one shot turned 7 real cuts into 9 for a plain detector.
 
 ### 6. Put every GPU server behind llama-swap, plus a small DJ-mode guard
 - **Why:** every project competes for one 12 GB GPU and the PC has crashed on long runs. You do not need to write a broker: [llama-swap](https://github.com/mostlygeek/llama-swap) (MIT, active, WinGet package for Windows) already starts and stops GPU servers on demand and keeps only one group loaded. It handles llama-server (LLM and VLM), whisper.cpp, stable-diffusion.cpp, audio.cpp and **ComfyUI** (a dedicated `/comfyui/` endpoint and a reserved `comfyui_auto` model ID so the browser websocket doesn't pin the GPU), plus `/upstream/<model>/` passthrough for anything else HTTP. `groups` with `exclusive: true` give the "only one big thing at a time" rule; `POST /api/models/unload` empties the card; `ttl` frees idle models.
@@ -82,7 +82,7 @@
 - **Why the DJ guard matters beyond VRAM:** NVIDIA driver DPC-latency spikes of 3–10 ms are a known cause of audio dropouts on Windows; heavy CUDA work makes it worse. Run LatencyMon once with a GPU job active and once without, while Serato plays.
 - **Hardware side:** on RTX 30-series, crashes under load are often millisecond transients that a power cap does not stop. Cheap things to try: cap the core clock (`nvidia-smi -lgc 210,1700` as admin, or an Afterburner curve), and watch **GDDR6X memory junction temperature** in HWiNFO during a long LLM or Whisper run (memory-bound work behaves like mining; 3080-class cards reach 104–110 °C there). If junction temps are high, thermal pads; if crashes persist at a capped clock, suspect the PSU.
 - **Confidence: medium.** llama-swap's features are documented in its README and guides; nobody I found runs exactly this mix on Windows. The crash diagnosis is from forum reports, not your logs.
-- **First step:** install llama-swap, move one workload (the VLM) behind it, and log `nvidia-smi --query-gpu=power.draw,clocks.gr,temperature.gpu,memory.used --format=csv -l 1` plus HWiNFO memory-junction temperature during the next long Reel Brain batch.
+- **First step:** install llama-swap with [`prototypes/llama-swap.example.yaml`](prototypes/llama-swap.example.yaml) as the starting config, run [`prototypes/dj_guard.py`](prototypes/dj_guard.py), move one workload (the VLM) behind it, and log `nvidia-smi --query-gpu=power.draw,clocks.gr,temperature.gpu,memory.used --format=csv -l 1` plus HWiNFO memory-junction temperature during the next long Reel Brain batch.
 
 ### 7. Beat grids for your own sets from your own track files
 - **Why:** blind beat tracking on a 150 BPM mix fights overlapping kicks in transitions, pitch riding and breakdowns. You have better information. **Serato DJ 4 logs every load** in `master.sqlite` → `history_entry` (artist, title, BPM, key, deck, `start_time`, `played`; verified in the [whats-now-playing reader](https://github.com/whatsnowplaying/whats-now-playing/blob/main/nowplaying/serato/reader.py)). Your library files carry Serato's beat grid (`Serato BeatGrid` GEOB). Align each played track to the set recording (your cross-correlation code plus whatstheID's speed ladder), then transform that track's grid into set time. This is the published "DJ-mix reverse engineering" approach (Schwarz & Fourer; Kim et al., ISMIR 2020).
@@ -91,7 +91,7 @@
 - **Precedent on real mixes:** Kim et al. (ISMIR 2020, [djmix-analysis](https://github.com/mir-aidj/djmix-analysis)) aligned tracks to 1,557 real 1001Tracklists mixes with subsequence DTW, worked example a Boiler Room set; they report DJs rarely change tempo or key much, which keeps stretch ratios small. Their repo has no licence file: read it, don't copy it.
 - **Confidence: medium.** The history fields are verified from code; alignment through heavy EQ/filter/FX is not tested on your sets.
 - **Could fail if:** the DJ rides the pitch so the stretch ratio drifts inside a track (fit it piecewise) or the track was played from a streaming service (no file).
-- **First step:** open your `master.sqlite` (read-only copy) and list the last session's `history_entry` rows next to your set recording's start time.
+- **First step:** list the last session with [`prototypes/serato_set_grid.py`](prototypes/serato_set_grid.py) `history`, then `align` three tracks you own against the recording. In a synthetic mix (track 3 % fast, bass cut for a 30 s blend, crowd noise) it recovered the ratio exactly and the offset to 15 ms.
 
 ### 8. Encode one house look per client
 - **Why:** "stock AI" is mostly the absence of decisions: default type, eased slides, a new colour per scene. A look that is written down as rules can be checked by your existing motion-graphics QA step; taste that lives in a prompt cannot.
@@ -107,13 +107,98 @@
 - **Do:** detect people and keypoints with RTMPose via [rtmlib](https://github.com/Tau-J/rtmlib) (Apache-2.0, ONNX, light) and keep YuNet as one signal. Choose the subject per shot, then solve the crop path offline as an L1-optimal path (Grundmann et al., "Auto-Directed Video Stabilization with Robust L1 Optimal Camera Paths", the method behind YouTube's stabiliser): the L1 objective produces static holds, constant pans and smooth ease-ins, like a camera operator. Google's AutoFlip (polynomial L2 fit) is the obvious off-the-shelf alternative, but MediaPipe lists it as a legacy solution whose support ended on 2023-03-01. I found MATLAB re-implementations of the L1 paper but no maintained Python one; the linear program is small enough to write with `scipy.optimize.linprog` (HiGHS, BSD) or cvxpy.
 - **Avoid:** Ultralytics YOLO (AGPL-3.0) anywhere near the FilmCraft fork.
 - **Confidence: medium.** Both pieces are established; the combination on club footage is untested.
-- **First step:** run rtmlib on one 60-second DJ clip and plot face-detection vs body-detection coverage per frame.
+- **First step:** run rtmlib on one 60-second DJ clip and plot face-detection vs body-detection coverage per frame; feed the body centres to [`prototypes/l1_reframe_path.py`](prototypes/l1_reframe_path.py). On a synthetic swaying DJ with 15 px jitter and 10 % missed detections, its path held still 84 % of the time with no direction changes, where a moving-average follow changed direction 189 times.
 
 ### 10. Write Serato grids and cues with rb2serato's encoders
 - **Why:** [rb2serato](https://github.com/SM4RTENHEIMER/rb2serato) (MIT, Sep 2026) writes `Serato Markers2`, `Serato Markers_` and **locked** `Serato BeatGrid` tags whose bytes match what Serato writes, verified on a 9,600-track library, with undo logs and audio-byte checks. It also documents Serato 4's import quirks (crate header must be exactly `1.0/Serato ScratchLive Crate`, WAV typed `wave`, Serato closed while writing). That is the risky half of whatstheID's 4c plan, already done.
 - **Portability, checked in the source:** the encoders live in `src/rb2serato/seratotags.py`, which imports only `base64`, `struct` and `dataclasses` and says its output was verified byte-for-byte against files written by Serato DJ Pro 2.x–4.x; `encode_beatgrid` takes a list of markers, so multi-marker (tempo-change) grids are supported. The macOS-specific parts are elsewhere: `tagwriter.py` (APFS clone-and-swap) and `seratolib.py` (`/Volumes` paths). On Windows, vendor `seratotags.py` only and write your own safe writer with mutagen: copy → write tags → verify the audio payload is byte-identical → replace.
 - **Confidence: medium.** The encoder code reads well and claims byte-for-byte verification, but rb2serato has **1 star and 0 forks**: it is one author's month-old project, and nobody else has confirmed the 9,600-track claim. The more-used alternative, [serato-tools](https://pypi.org/project/serato-tools/) (MIT, Python ≥3.12, 31 stars, can write beat grids and cues), has no stated Serato 4 support. Round-trip every write through two parsers (rb2serato's decoder and serato-tools) and Serato itself before trusting either.
 - **First step:** vendor `seratotags.py`, write a grid to a *copy* of one track, load it in Serato, confirm.
+
+---
+
+## 1b. The first week, day by day
+
+Tested helper scripts for most days are in [`prototypes/`](prototypes/README.md) (each passes a synthetic test;
+none has run on Windows yet). Your PowerShell doesn't take `&&`, so every command is on its own line.
+
+**Day 0 (15 minutes): the four facts that change the plan**
+```powershell
+(Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1GB   # >= 32 → Qwen3.6-35B-A3B; else Qwen3.5-9B
+ollama --version                                                                  # < 0.30 → penalties were ignored; update
+hermes --version                                                                  # < 0.21.2 → update before anything else
+```
+Serato: Help → About (Lite or Pro? 3.x or 4.x?). 4.x keeps history in `%LOCALAPPDATA%\Serato\Library\master.sqlite`.
+
+**Day 1 (Laya, Top 10 #2, one evening).** Export 200 recent routing decisions as JSON lines
+(`{"text", "laya", "confidence", "label"}`), fill `label` by hand, then:
+```powershell
+cd research\prototypes
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python laya_eval.py routes.jsonl
+```
+If accuracy is near the majority-class baseline or ECE is above ~0.2: start labelling toward 2–3k rows (your corrections plus a
+teacher model overnight), then `python laya_eval.py routes.jsonl --export-rows train_rows.jsonl --questions router_question.json`
+and run Laya's fine-tuning notebook (`notebooks/laya_finetune_typed_decisions_2xT4_kaggle.ipynb`) on those rows instead of its
+benchmark dataset; fewer epochs if you have fewer than a few thousand rows (Laya issue #963).
+
+**Day 2 (Reel Brain loops, Top 10 #3).** Pick the 20 reels that failed most recently:
+```powershell
+python vlm_json_guard.py C:\reels\failed\reel01.mp4 --api ollama --model qwen3-vl:8b --num-ctx 8192 --context (Get-Content C:\reels\failed\reel01.txt -Raw)
+```
+It downscales frames to ≤ 640 px, refuses requests that overflow `num_ctx`, uses Qwen's recommended sampling, and logs each
+attempt. Count valid notes out of 20 before and after. If loops remain, run the same reels against GLM-4.6V-Flash (LM Studio
+lists it; or a GGUF behind llama-swap, Day 3).
+
+**Day 3 (one GPU, Top 10 #6).**
+```powershell
+winget install llama-swap
+```
+Download a CUDA build of llama.cpp (`llama-b<N>-bin-win-cuda-…-x64.zip` from its GitHub releases), copy
+[`prototypes/llama-swap.example.yaml`](prototypes/llama-swap.example.yaml), fix the paths, then:
+```powershell
+llama-swap --config llama-swap.yaml --listen 127.0.0.1:8080
+python dj_guard.py --llama-swap http://127.0.0.1:8080
+```
+Start Serato and confirm the guard logs "DJ mode on" and `nvidia-smi` shows the card empty. Then run one long Reel Brain batch
+with HWiNFO logging GPU memory-junction temperature and `nvidia-smi --query-gpu=power.draw,clocks.gr,temperature.gpu,memory.used --format=csv -l 1 > gpu.csv`.
+If junction temperature passes ~100 °C, cap clocks (`nvidia-smi -lgc 210,1700` in an admin shell) and plan new thermal pads.
+
+**Day 4 (Hermes, Top 10 #4).**
+```powershell
+hermes update
+hermes backup
+hermes prompt-size
+hermes tools
+hermes config set tools.tool_search.enabled off
+```
+Point Hermes at llama-swap (`providers.llamacpp.base_url: http://127.0.0.1:8080/v1`, model `agent`), keep the old Ollama profile
+as a fallback, and replay 20 logged requests on both. Keep the one with fewer failed tool turns.
+
+**Day 5 (reference clips, Top 10 #5).** Collect ~40 clips you think are the target (analysis only):
+```powershell
+yt-dlp -o "refs\%(id)s.%(ext)s" -f "bv*[height<=1080]+ba/b" --batch-file refs.txt
+python analyze_reference_clips.py refs --strobe-safe --out refs_stats
+```
+Write the medians (cuts per 10 s, shot length in beats, % of cuts on bar lines, first-shot length, drop position) into your
+direction folder as `style-sheet.md`, and make the planner's constraints come from it.
+
+**Day 6 (your own set's grid, Top 10 #7).**
+```powershell
+python serato_set_grid.py history --db "$env:LOCALAPPDATA\Serato\Library\master.sqlite" --recording-start "2026-10-10 23:41:05"
+python serato_set_grid.py align --mix set.wav --track "D:\Music\track.mp3" --near 1830 --bpm 148.0 --first-downbeat 0.112
+```
+Check three tracks by ear against the recording. If the offsets hold, this replaces blind beat tracking for your own sets.
+
+**Day 7 (licence + first money test, Top 10 #1 and money path 1).** In ComfyUI, build one FLUX.2 [klein] 4B workflow (official
+ComfyUI tutorial: `flux-2-klein-4b-fp8.safetensors` in `models/diffusion_models`, `qwen_3_4b.safetensors` in
+`models/text_encoders`, `flux2-vae.safetensors` in `models/vae`; accept Black Forest Labs' licence on Hugging Face first) and
+rerun ten prompts from your direction folder. Then message one collective with the next-morning clip offer.
+
+**Week 2 candidates:** reframing with rtmlib + [`l1_reframe_path.py`](prototypes/l1_reframe_path.py) (Top 10 #9), the house
+`look.md` for the collective (#8), Serato grid write-back to copies (#10).
 
 ---
 
@@ -177,6 +262,7 @@
 **Open risks**
 - FilmCraft upstream's own gap list: Windows runtime is under-tested (G9), no PR CI (G4), and **10-bit / 4:2:2 H.264/HEVC does not decode on Windows without hardware support** (G3). If your camera records 10-bit 4:2:2, transcode to 8-bit 4:2:0 before ingest or the import fails.
 - **Arabic text:** FilmCraft's title engine has harfrust + bidi, but Arabic titles are reported broken upstream (#395, open). Render Arabic captions in the HTML layer.
+- **Fallback renderer:** DaVinci Resolve Studio 21.1 ($295 one-time) now has a native MCP server; with the plan kept in OTIO it is a one-day switch if FilmCraft blocks you on Windows (see 5b).
 - **Noisy low-light footage** is a bigger "cheap" signal than any graphic. Try ffmpeg's `nlmeans`/`hqdn3d` as an external pre-pass first; DaVinci Resolve Studio's temporal noise reduction ($295 one-time) is the standard paid fix if that is not enough.
 - **Client work: deliver, don't auto-post.** A collective will want to approve posts and will not hand you its account; keep auto-posting for your own channels.
 - Copyright: club clips carry other artists' tracks. Instagram mutes or limits; plan captions and track IDs (Serato history gives you artist and title for free), and keep originals.
@@ -250,6 +336,7 @@ What you already have (from the repo): shazamio + AudD, your own landmark finger
 - **Grid quality:** fit the grid to the **kick attack**, not the energy peak (onset of the low band's envelope rise), per beat, then least-squares the tempo. rb2serato measured Serato's grid a median 8 ms ahead of Rekordbox's on 1,563 MP3s: check your offset against Serato on your own files.
 - **Downbeats/phrases:** score each of the 4 bar phases (and 8/16-bar phrase phases) by how well novelty peaks (energy, new elements, breakdown edges) land on them. Half-time D&B: prefer 170–176 over 85–88 by genre prior.
 - **IDs in long mixes:** segment first (novelty), then query the middle of each segment where one track plays alone, instead of a fixed 60 s grid; keep the speed ladder.
+- **Replace shazamio with AudD's enterprise endpoint as the cloud fallback** (see 5b): documented, takes hours-long files, bills per 12 s processed, roughly $0.12–0.30 per two-hour mix at one sample per 2 minutes; your own notes already measured it naming 3 of 6 underground records to Shazam's 0.
 - **Reference rbxport** ([rbxport.com](https://rbxport.com/)): a free Rekordbox library manager (not open source) by Chris Le, who also wrote [serato-connect](https://github.com/chrisle/serato-connect) (MIT). Its grid analysis is "tuned for electronic music"; I could not read details (site unreachable).
 - **Visualiser:** drive shaders from beat/bar/phrase *phase* from your analysis, not raw FFT amplitude: visuals lock to the music's structure. Butterchurn (MIT, Milkdrop in WebGL) is a reference; Hydra is AGPL.
 
@@ -312,6 +399,14 @@ The biggest calls the audits killed or reversed (details and dates in `audit-log
 8. **"Qwen3.6 runs at ~36 tok/s on a 12 GB card."** I couldn't trace that number to a source; replaced with traceable reports of 28–47 tok/s on a 3060 with 32 GB RAM.
 9. **"Use HyperFrames' transparent WebM in FilmCraft."** FilmCraft drops VP9 alpha; use ProRes 4444.
 10. **"AutoFlip drifts more than an L1 path."** My own unsupported claim; removed. AutoFlip has also been unsupported since 2023.
+
+## 5b. Steelman: one rejected option per project, argued for
+
+- **Creative Studio: render in DaVinci Resolve Studio instead of FilmCraft.** *For:* Resolve 21.1 (September 2026) ships a **native MCP server** that Blackmagic says lets Claude and Codex drive Resolve Studio through its official scripting API; a community server ([resolve-mcp](https://glama.ai/mcp/servers/DigitalWorkflowCompany/resolve-mcp)) lists 88 tools covering timelines, import, grading and rendering. Resolve is proven on Windows, decodes 10-bit 4:2:2 camera files, has temporal noise reduction and AI reframing, and imports OTIO. *Against:* $295 one-time; closed source; 21.1 also **moved Python scripting out of the free edition**, so automation means Studio; the MCP server is weeks old. *Verdict:* not instead, but as the fallback. Keep the plan in OTIO (Top 10 tip in 2.1) so that if FilmCraft blocks you on Windows (crashes, 10-bit footage, Arabic text), switching renderers costs a day and $295, not a rewrite.
+- **Hermes + Laya: drop Laya entirely and let the main model route.** *For:* zero-shot Laya is near chance by its own README; Qwen3.6 at ~40 tok/s can classify a message in a second or two and is probably more accurate than an untuned 400M encoder; one less moving part. *Against:* every message would wake the GPU model (contention with ComfyUI and Reel Brain), and Laya is free to run on CPU. *Verdict:* it wins **if you won't label 2–3k messages**. If you will, the fine-tuned Laya is cheaper per message and keeps the GPU free.
+- **Reel Brain: send the backlog to a cloud video model.** *For:* your saved reels are public content, so privacy is not the usual objection; a hosted Gemini-class model reads video and audio natively, returns schema-constrained JSON, and takes the 1,000-reel backlog off your GPU entirely (no loops on your card, no crashes). Dopamine does exactly this. *Against:* I could not confirm the current free-tier video limits or that Google AI Studio's free tier is offered in Egypt; paying needs a card that works abroad; it breaks your local-first rule. *Verdict:* worth one afternoon's test on 50 reels **if** AI Studio works from your account; keep the local pipeline for new saves.
+- **whatstheID: pay AudD for long mixes instead of relying on shazamio.** *For:* shazamio is an unofficial Shazam client that can break any day; AudD is a paid, documented API whose enterprise endpoint takes hours-long files and bills per 12 s of audio processed, with a `skip`/`every` option for one request per 120 s. At $2–5 per 1,000 units that is roughly **$0.12–0.30 per two-hour mix** at one sample per 2 minutes. Your own notes measured AudD naming 3 of 6 underground records where Shazam named none. *Against:* paid, card from Egypt, and your library fingerprinter still beats both on records you own. *Verdict:* **it wins as the cloud fallback** behind your own fingerprinter. Swap it in for shazamio when you next touch `recognize.py`.
+- **Inspiration Canvas: build it, on tldraw's agent starter kit.** *For:* tldraw ships an MIT agent starter kit (`npm create tldraw@latest -- --template agent`) where a model reads the canvas (screenshots plus shape data) and edits it through validated actions; that is "Claude reads my taste board" out of the box, and the SDK runs without a licence key on `localhost`. *Against:* it is a new app to maintain, and Obsidian Canvas + Eagle already cover collecting and reading. *Verdict:* still no, for now. If the vault-plus-Eagle setup proves too static after a month of use, this is the starting point.
 
 ## 6. Still uncertain (and what would settle it)
 
@@ -402,6 +497,7 @@ Stars from the GitHub page; last commit and licence from a shallow clone. "Win /
 - Licences: Qwen-Image 2.1 [latenode](https://latenode.com/ai-trends/qwen-image-2-1-commercial-licence), [techaiwire](https://techaiwire.com/articles/qwen-research-license-explained/); FLUX.2 klein [VentureBeat](https://venturebeat.com/technology/black-forest-labs-launches-open-source-flux-2-klein-to-generate-ai-images-in); Z-Image-Turbo [ComfyUI wiki](https://comfyui-wiki.com/en/models/z-image/z-image-turbo); MiniMax H3 [mer.vin](https://mer.vin/news/minimax-h3-open-weight-video-model-blocked-us-eu-uk/), [12 GB guide](https://runaihome.com/blog/minimax-h3-comfyui-gguf-workflow-tutorial-2026/); Cohere Transcribe Arabic [Cohere](https://cohere.com/blog/transcribe-arabic); tldraw [licence key](https://tldraw.dev/sdk-features/license-key)
 - Publishing: [Instagram content publishing](https://developers.facebook.com/docs/instagram-platform/content-publishing); [TikTok content sharing guidelines](https://developers.tiktok.com/docs/en/content-sharing-guidelines); [YouTube unverified-app uploads](https://www.ayrshare.com/solutions/google-api-error-403-unverified-app-how-to-fix-the-audit-pipeline/); [Trial Reels](https://www.lindseygamble.com/blog/instagram-launches-trial-reels-giving-creators-the-ability-to-share-reels-with-non-followers-before-sharing-with-everyone)
 - GPU and audio: ComfyUI free endpoint [RunComfy docs](https://docs.runcomfy.com/serverless/instance-proxy-endpoints); DPC latency [Blue Cat Audio](https://www.bluecataudio.com/Blog/?p=4390); 3080 Ti transients [Level1Techs](https://forum.level1techs.com/t/think-i-have-a-dud-3080ti-you-tell-me/190443); GDDR6X pads [Igor's Lab](https://www.igorslab.de/en/simple-pad-mod-for-the-force-rtx-3080-founders-edition-slowers-the-gddr6x-temperature-by-a-whopping-8-degrees/); clock locking [Zivid](https://support.zivid.com/support/unstable-capture-time-windows.html)
+- Resolve 21.1: [MCP and presets (Digital Production)](https://digitalproduction.com/2026/09/08/resolve-21-1-adds-mcp-and-finally-gets-presets/), [scripting moved to Studio (Puget Systems)](https://www.pugetsystems.com/blog/2026/09/10/how-davinci-resolve-free-v21-1-scripting-changes-affect-puget-bench/), [community resolve-mcp](https://glama.ai/mcp/servers/DigitalWorkflowCompany/resolve-mcp); tldraw [agent starter kit](https://tldraw.dev/starter-kits/agent); AudD [enterprise endpoint docs](https://docs.audd.io/enterprise.md)
 - DJ tools: [Lexicon 1.10](https://www.digitaldjtips.com/lexicon-1-10-brings-serato-4-0-support-track-timeline-play-history/); [TrackSniff](https://www.digitaldjtips.com/tracksniff-shazam-alternative/); [AudD](https://audd.io/); [rbxport](https://rbxport.com/); slskd licence [AUR](https://aur.archlinux.org/pkgbase/slskd-bin)
 - Canvas: [JSON Canvas spec](https://github.com/obsidianmd/jsoncanvas/blob/main/spec/1.0.md); [Eagle store](https://eagle.cool/store); [Pinterest access tiers](https://developers.pinterest.com/docs/key-concepts/access-tiers/); [Instagram export guide](https://takeoutday.org/guides/how-to-export-instagram-data); type foundries [Velvetyne FAQ](https://velvetyne.alwaysdata.net/about/faq/), [Collletttivo](https://collletttivo.it/journal/open-source-hyper-capitalism)
 

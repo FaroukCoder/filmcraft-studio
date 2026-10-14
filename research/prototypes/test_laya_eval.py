@@ -46,6 +46,16 @@ def main() -> int:
         problems.append(f"ECE should expose over-confidence, got {rep['ece']}")
     if rep.get("baseline_cv_accuracy", 0) < 0.9:
         problems.append(f"baseline should learn the routes, got {rep.get('baseline_cv_accuracy')}")
+    # export to Laya's training-row format
+    q = {"route": {"type": "choice", "instructions": "Which agent should handle this?",
+                   "criteria": {k: f"{k} requests" for k in ROUTES}}}
+    with tempfile.TemporaryDirectory() as d:
+        qf, out = Path(d) / "q.json", Path(d) / "rows.jsonl"
+        qf.write_text(json.dumps(q), encoding="utf-8")
+        laya_eval.main([f.name, "--export-rows", str(out), "--questions", str(qf), "--qid", "route"])
+        first = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
+        if set(first) != {"state", "questions", "gold"} or first["gold"]["route"] not in ROUTES:
+            problems.append(f"bad export row: {first}")
     print("FAIL\n  " + "\n  ".join(problems) if problems else "PASS")
     return 1 if problems else 0
 

@@ -235,3 +235,34 @@ for licence expressions; re-searched any number I could not trace.
 **Still unverifiable from here:** Hugging Face model cards (Qwen-Image 2.1, MiniMax H3, GLM-4.6V-Flash, MiniCPM-V
 4.5), arXiv full texts, dev.to. Claims that depend on them are marked in the "Still uncertain" table.
 
+## Round 9 — deep dive, prototypes, first-week plan, steelman (02:33–03:02 UTC)
+
+**Built and tested six prototypes** in `research/prototypes/` (synthetic tests, all pass):
+reference-clip analyser, VLM JSON guard, Serato set grid (history + alignment), L1 reframing path, DJ guard, Laya
+evaluator/exporter; plus a llama-swap config that parses.
+
+**What building them caught (each would have been a wrong instruction in the report)**
+- **librosa's tempo is quantised to its frame grid**: a 150 BPM test clip read as 152. Least-squares over beat
+  numbers fixed it, but only after a second bug: numbering beats from the first one with the quantised period drifts
+  a whole beat in under a minute. Number interval by interval. (Same trap whatstheID's notes describe.)
+- **Kick-band features can't align a track inside a mix**: a four-on-the-floor kick is periodic, and DJs cut the
+  incoming bass anyway. Alignment now uses 150 Hz–8 kHz onsets; it recovered a 3 % speed-up exactly and the offset
+  to 15 ms through a bass-cut blend with noise.
+- **Strobes are cuts to a content detector, and PySceneDetect's adaptive detector didn't fix it**: my first
+  "strobe-safe" mode still found 17 cuts for 7. A before/after persistence check (a flash returns to the same
+  picture) fixed it: plain detector 9, strobe-safe 7. Without this, the reference measurements on club footage would
+  have counted strobes as edits.
+- **Phrase position needs an anchor.** Counting 8-bar phrases from the first detected beat is arbitrary; counting from
+  the drop is what club tracks do.
+- **L1 path works as claimed on synthetic data**: 84 % static, 0 direction changes, subject always in frame; a
+  moving-average follow changed direction 189 times.
+
+**Steelman results:** AudD's enterprise endpoint **wins** as whatstheID's cloud fallback (documented, ~$0.12–0.30 per
+mix, measured better than Shazam on your records) and moves into the report. Resolve Studio 21.1 (native MCP, $295)
+becomes the named fallback renderer, not the primary. Dropping Laya wins only if you won't label. A cloud video model
+for the Reel Brain backlog is a conditional test. A tldraw canvas app stays rejected.
+
+**New facts:** Resolve 21.1 moved Python scripting to Studio and added a native MCP server; FLUX.2 klein 4B file
+layout from the ComfyUI tutorial (gated download, accept BFL licence); GLM-4.6V-Flash is listed by LM Studio with
+vision and tools; Laya's training rows are `{state, questions, gold}`.
+

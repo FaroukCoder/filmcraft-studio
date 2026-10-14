@@ -61,12 +61,65 @@ def extract_audio(path: Path, wav: Path, sr: int = 22050) -> None:
     )
 
 
-def detect_cuts(path: Path, threshold: float) -> list[float]:
+def _hsv_hist(frame) -> "np.ndarray":
+    import cv2
+
+    small = cv2.resize(frame, (96, 96))
+    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+    h = cv2.calcHist([hsv], [0, 1, 2], None, [12, 8, 4], [0, 180, 0, 256, 0, 256])
+    return cv2.normalize(h, h).flatten()
+
+
+def persistent(path: Path, cuts: list[float], gap: float = 0.12, span: float = 0.3, min_dist: float = 0.3) -> list[float]:
+    """Keep a candidate cut only if the picture *after* it differs from the picture
+    *before* it. A strobe flash or a camera flash returns to the same picture, so the
+    frames either side look alike; a real cut doesn't. Compares the median HSV
+    histogram of [c-span, c-gap] with that of [c+gap, c+span]."""
+    import cv2
+
+    cap = cv2.VideoCapture(str(path))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+
+    def hist_over(t0: float, t1: float):
+        hs = []
+        for t in np.arange(max(t0, 0.0), t1, 1.0 / fps):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(t * fps)))
+            ok, frame = cap.read()
+            if ok:
+                hs.append(_hsv_hist(frame))
+        return np.median(np.array(hs), axis=0).astype("float32") if hs else None
+
+    kept = []
+    for c in cuts:
+        before, after = hist_over(c - span, c - gap), hist_over(c + gap, c + span)
+        if before is None or after is None:
+            kept.append(c)
+            continue
+        if cv2.compareHist(before, after, cv2.HISTCMP_BHATTACHARYYA) >= min_dist:
+            kept.append(c)
+    cap.release()
+    return kept
+
+
+def detect_cuts(path: Path, threshold: float, strobe_safe: bool = False, min_scene: str = "0.4s") -> list[float]:
+    """Cut times. Club footage is full of strobes, which a content detector reads as
+    cuts (a flash is a huge frame-to-frame change). strobe_safe keeps only cuts where
+    the shot after differs from the shot before (see `persistent`)."""
     from scenedetect import ContentDetector, detect
 
-    scenes = detect(str(path), ContentDetector(threshold=threshold))
+    min_len = "0.1s" if strobe_safe else min_scene  # let flashes through, then judge them
+    scenes = detect(str(path), ContentDetector(threshold=threshold, min_scene_len=min_len))
     # Each scene is (start, end); a cut is the start of every scene after the first.
-    return [s[0].get_seconds() for s in scenes[1:]]
+    cuts = [s[0].get_seconds() for s in scenes[1:]]
+    if strobe_safe:
+        cuts = persistent(path, cuts)
+        min_s = float(min_scene.rstrip("s")) if min_scene.endswith("s") else 0.4
+        merged: list[float] = []
+        for c in cuts:
+            if not merged or c - merged[-1] >= min_s:
+                merged.append(c)
+        cuts = merged
+    return cuts
 
 
 def track_beats(wav: Path, bpm_min: float, bpm_max: float) -> tuple[np.ndarray, np.ndarray | None, str]:
@@ -153,7 +206,7 @@ def find_drop(wav: Path, beats: np.ndarray) -> float | None:
 
 def analyse(path: Path, args: argparse.Namespace, cut_rows: list[dict]) -> ClipStats:
     duration = probe_duration(path)
-    cuts = detect_cuts(path, args.threshold)
+    cuts = detect_cuts(path, args.threshold, args.strobe_safe, args.min_scene)
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "audio.wav"
         extract_audio(path, wav)
@@ -212,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bpm-max", type=float, default=160.0)
     ap.add_argument("--threshold", type=float, default=27.0, help="PySceneDetect ContentDetector threshold")
     ap.add_argument("--tolerance-ms", type=float, default=60.0, help="how close to a beat counts as 'on' it")
+    ap.add_argument("--strobe-safe", action="store_true", help="reject flashes: keep cuts whose before/after shots differ")
+    ap.add_argument("--min-scene", default="0.4s", help="shortest shot to accept, e.g. 0.4s")
     args = ap.parse_args(argv)
 
     files = sorted(p for p in args.clips.iterdir() if p.suffix.lower() in VIDEO_EXT)

@@ -13,6 +13,11 @@ default; `--embed google/embeddinggemma-300m` uses sentence-transformers if inst
 
     python laya_eval.py routes.jsonl
     python laya_eval.py routes.jsonl --embed google/embeddinggemma-300m
+    python laya_eval.py routes.jsonl --export-rows train_rows.jsonl --questions router_question.json --qid route
+
+The export writes Laya's own training-row format, one line per message:
+{"state": <message>, "questions": <your question set>, "gold": {<qid>: <label>}},
+which is what Laya's fine-tuning notebook builds from its benchmark dataset.
 """
 from __future__ import annotations
 
@@ -103,15 +108,37 @@ def report(rows: list[dict], embed: str | None = None) -> dict:
     return out
 
 
+def export_rows(rows: list[dict], questions: dict, qid: str, out_path: str) -> int:
+    if qid not in questions:
+        raise SystemExit(f"question id {qid!r} not in the questions file")
+    allowed = set((questions[qid].get("criteria") or {}).keys())
+    n = 0
+    with open(out_path, "w", encoding="utf-8") as fh:
+        for r in rows:
+            if allowed and r["label"] not in allowed:
+                continue  # a label your question doesn't offer can't be learned
+            fh.write(json.dumps({"state": r["text"], "questions": questions, "gold": {qid: r["label"]}},
+                                ensure_ascii=False) + "\n")
+            n += 1
+    return n
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("jsonl")
     ap.add_argument("--embed", help="sentence-transformers model id for the baseline")
+    ap.add_argument("--export-rows", help="write Laya training rows here")
+    ap.add_argument("--questions", help="JSON file with your Laya question set (as passed to predict)")
+    ap.add_argument("--qid", default="route", help="which question the labels answer")
     args = ap.parse_args(argv)
     rows = load(args.jsonl)
     if not rows:
         print("no labelled rows", file=sys.stderr)
         return 1
+    if args.export_rows:
+        questions = json.load(open(args.questions, encoding="utf-8"))
+        n = export_rows(rows, questions, args.qid, args.export_rows)
+        print(f"wrote {n} training rows to {args.export_rows}")
     print(json.dumps(report(rows, args.embed), indent=2, ensure_ascii=False))
     return 0
 

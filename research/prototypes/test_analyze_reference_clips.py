@@ -74,6 +74,30 @@ def write_video(audio: Path, out: Path) -> None:
     )
 
 
+def add_strobes(src: Path, dst: Path, start: float, end: float, every: float = 0.4) -> None:
+    """White flash for 2 frames every `every` seconds between start and end (no real cut)."""
+    on = "+".join(f"between(t,{t:.2f},{t + 0.08:.2f})" for t in np.arange(start, end, every))
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-vf",
+                    f"eq=brightness=0.9:enable='{on}'", "-c:a", "copy", str(dst)], check=True)
+
+
+def strobe_check(tmp: Path) -> list[str]:
+    """Strobes inside one shot (8.0-12.8 s) must not become cuts in strobe-safe mode."""
+    clean = tmp / "clips" / "synthetic.mp4"
+    strobe_dir = tmp / "strobe"
+    strobe_dir.mkdir()
+    add_strobes(clean, strobe_dir / "strobe.mp4", 8.6, 12.4)
+    plain = arc.detect_cuts(strobe_dir / "strobe.mp4", 27.0, strobe_safe=False)
+    safe = arc.detect_cuts(strobe_dir / "strobe.mp4", 27.0, strobe_safe=True)
+    print(f"strobes: plain detector {len(plain)} cuts, strobe-safe {len(safe)} cuts (true 7)")
+    problems = []
+    if abs(len(safe) - len(CUTS)) > 1:
+        problems.append(f"strobe-safe found {len(safe)} cuts {safe}")
+    if len(plain) <= len(safe):
+        problems.append("expected the plain detector to be fooled by strobes more than strobe-safe")
+    return problems
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -86,6 +110,7 @@ def main() -> int:
         assert rc == 0, rc
         row = next(csv.DictReader(open(out / "clips.csv", encoding="utf-8")))
         cuts = list(csv.DictReader(open(out / "cuts.csv", encoding="utf-8")))
+        strobe_problems = strobe_check(tmp)
     print(row)
     found = [float(c["cut_s"]) for c in cuts]
     problems = []
@@ -103,6 +128,7 @@ def main() -> int:
         problems.append(f"on-phrase {row['cuts_on_phrase8_pct']} (want 28.6)")
     if not row["drop_at_s"] or abs(float(row["drop_at_s"]) - 16.0) > 0.45:
         problems.append(f"drop at {row['drop_at_s']} (want 16.0)")
+    problems += strobe_problems
     if problems:
         print("FAIL\n  " + "\n  ".join(problems))
         return 1

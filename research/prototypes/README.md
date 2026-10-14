@@ -8,7 +8,7 @@ and should run on Windows, but **nobody has run them on Windows yet**.
 
 | Script | Top 10 | What it does | Test result (synthetic) |
 |---|---|---|---|
-| `analyze_reference_clips.py` | #5 | Cuts vs beats/bars/8-bar phrases, shot length in beats, drop position, for a folder of reference clips | 150 BPM clip, 7 known cuts: BPM 150.02, 7/7 cuts, on-beat 85.7 %, on-bar 71.4 %, drop at 16.02 s (true 16.0) |
+| `analyze_reference_clips.py` | #5 | Cuts vs beats/bars/8-bar phrases, shot length in beats, drop position, for a folder of reference clips; `--strobe-safe` rejects strobe flashes | 150 BPM clip, 7 known cuts: BPM 150.02, 7/7 cuts, on-beat 85.7 %, on-bar 71.4 %, drop at 16.02 s (true 16.0). Same clip with strobes inside one shot: plain detector 9 cuts, `--strobe-safe` 7 |
 | `vlm_json_guard.py` | #3 | Downscaled frames, token budget vs `num_ctx`, Qwen's recommended sampling, bounded schema, loop detection, retry, two-pass fallback; Ollama or OpenAI-compatible API | Fake server that loops, then returns invalid JSON: recovered a valid note via the fallback on both APIs; 8 frames at 360×640 ≈ 1.9k tokens vs > 16k at full resolution |
 | `serato_set_grid.py` | #7 | Reads Serato 4 `master.sqlite` history; aligns a track you own inside your set recording (offset + stretch ratio) and maps its grid into set time | Track played 3 % fast with its bass cut for a 30 s blend and noise on top: ratio 1.030 (true 1.03), offset 50.015 s (true 50.0) |
 | `l1_reframe_path.py` | #9 | L1-optimal (Grundmann et al.) 9:16 crop path from noisy subject positions | 20 s DJ, 15 px jitter, 10 % missed detections: 83.6 % of frames static, 0 direction changes, subject in frame 100 %; an EMA follow: 11.5 % static, 189 direction changes. Solves 600 frames in 0.2 s |
