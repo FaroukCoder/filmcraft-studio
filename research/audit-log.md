@@ -1288,3 +1288,24 @@ mistaken for one); reads trailing-comma literals; and reports computed or relati
 have the agent write times as beat counts (`beat(n)`) or check the rendered video.
 
 **Confidence changes:** none (the house-look item was already medium, and this narrows what the prototype claims).
+
+## Round 59 — settling "Still uncertain" rows from primary sources (06:20–06:21 UTC)
+
+**Attack:** four rows in section 6 said "unread" or "secondary only". Tried to settle each. Hugging Face,
+comfy.org and support.upwork.com are all blocked to this sandbox (DNS fails, proxy 403), so where a fact is
+stated below it comes from a search index of the primary page, and the report says so.
+
+- **Arabic aligner licence:** `jonatasgrosman/wav2vec2-large-xlsr-53-arabic` is listed as Apache-2.0, trained on
+  Common Voice Arabic + the Arabic Speech Corpus (so mostly Modern Standard Arabic). Row narrowed to what's still
+  open: English words in code-switched lines, and the card's own licence line.
+- **MiniMax H3:** the $20 M cap and the "show MiniMax H3 in the interface" rule are quoted in a licence Q&A thread
+  on the H3 repo (as indexed). **New risk found:** write-ups disagree on whether the territory clause also covers
+  where *outputs* are used. If it does, a clip rendered in Cairo for a US or EU Upwork client is outside the free
+  grant. Added to 2.1's "skip" bullet and the uncertain row. H3 was already "personal only", so no ranking change,
+  but the reason is now sharper.
+- **Upwork Direct-to-Local-Bank:** Egypt (EGP) is on Upwork's own list, $0.99 a withdrawal, within four business
+  days. Settled; the row now tracks only the unpublished FX margin. Also corrected a near-miss: the new $2.99 fee
+  from 1 September 2026 is for Direct-to-US-Bank, not local bank.
+- **Contra in Egypt:** still unknown (no payout list found). Row unchanged.
+
+**Confidence changes:** none.
