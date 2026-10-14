@@ -979,3 +979,19 @@ if no prototype existed, and checked every block against the brief's six fields.
   "don't loosen them"; reworded there instead. Track-ID captions folded into #8 (they come free with the history).
 
 **Confidence changes:** none; #10's title and first step changed.
+
+## Round 42 — Reel Brain's labels: does Instagram's export carry your folders? (05:21–05:23 UTC)
+
+**Attack:** `collections_probe.py` and the classification advice assume your collection names are available as
+labels, and 2.3 tells you to use Instagram's export instead of instagrapi. Nobody had checked what the export holds.
+
+**Found:** two open-source parsers ([max-lutz/instasaved PR #26](https://github.com/max-lutz/instasaved/pull/26), Kotlin;
+[TikTokAnalyzer PR #20](https://github.com/danfox127-dotcom/TikTokAnalyzer/pull/20)) read `saved_posts.json` and
+`saved_collections.json`, the latter listing each collection by name with its posts. So the labels exist. Two
+pitfalls they both handle and the report didn't mention: **Meta writes UTF-8 bytes as separate characters**, so
+Arabic captions and collection names arrive garbled (fix: `s.encode('latin-1').decode('utf-8')`, checked here on
+escaped Arabic, with a try/except for strings that were already right); and posts can sit in a collection without
+appearing in `saved_posts.json`. Field names weren't confirmed from Meta's own docs (none found): the report says to
+check them on your own export.
+
+**Confidence changes:** none; one Reel Brain step now won't silently garble your Arabic collections.
