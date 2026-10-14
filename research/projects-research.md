@@ -26,7 +26,7 @@
 |---|---|---|---|---|
 | 1 | Take client-facing image generation off Qwen-Image 2.1 (research-only licence) | Creative Studio | 2–3 h | medium |
 | 2 | Measure Laya's routing accuracy, then fine-tune and calibrate it on labelled logs | Hermes + Laya | 2 h, then 1–2 days | high |
-| 3 | Serve vision/structured-output models with llama.cpp, not Ollama, and bound the JSON | Reel Brain, Creative Studio | 0.5–1 day | medium |
+| 3 | Fix the looping vision JSON at the source: frame-token budget, sampling, quant, bounded schema | Reel Brain, Creative Studio | 0.5 day | medium |
 | 4 | Move Hermes to llama.cpp with MoE expert offload; trim tools by hand (Tool Search breaks Qwen) | Hermes | 0.5–1 day | medium |
 | 5 | Measure 40 reference clips and turn "Boiler Room style" into numbers | Creative Studio | 1 day | high |
 | 6 | Put every GPU server behind llama-swap, add a DJ-mode guard, cap clocks and check VRAM temps | all | 0.5–1 day | medium |
@@ -50,16 +50,16 @@
 - **Could fail if:** labels are too few or too noisy, or your messages mix Arabic and English in ways the multilingual checkpoint reads poorly. Kaggle means uploading your messages to Google: strip anything private first, or train on CPU.
 - **First step:** export 200 recent routing decisions with the message text and mark each right or wrong. One evening.
 
-### 3. Serve vision and structured output with llama.cpp, not Ollama
-- **Why:** Ollama issues [#14493](https://github.com/ollama/ollama/issues/14493) and [#15783](https://github.com/ollama/ollama/issues/15783) report that Ollama's Go engine (`ollamarunner`), which is what runs Qwen3-VL since Ollama 0.12.7 and Qwen 3.5, implements only temperature, top-k, top-p and min-p: **`repeat_penalty`, `presence_penalty` and `frequency_penalty` are accepted and silently discarded** (`repeat_penalty: 5.0` gave the same output as `1.0`), and that the `qwen3-vl` renderer is affected by a missing-generation-prompt bug. Separate issues show Qwen3-VL repetition loops in Ollama and LM Studio ([QwenLM/Qwen3-VL#1611](https://github.com/QwenLM/Qwen3-VL/issues/1611)), garbage when image tokens exceed `num_ctx` ([ollama#13084](https://github.com/ollama/ollama/issues/13084)), and broken JSON with thinking + `format` ([ollama#10929](https://github.com/ollama/ollama/issues/10929)). That is a close match to "broken or looping JSON".
-- **Do:** run the VLM with `llama-server --jinja -m <model>.gguf --mmproj <mmproj>.gguf`, pass a JSON schema (`response_format`/`json_schema`), keep penalties on, and design the schema so it cannot loop: `maxItems` on every array, `maxLength` on strings, enums where possible, thinking off, `n_predict` capped. Validate with Pydantic; on failure retry once at a different temperature, then fall back to "free text → second small call that only formats JSON".
-- **Confidence: medium.** The Ollama bug is documented; that it causes *your* loops is inferred. Grammar-constrained decoding can loop in llama.cpp too, which is why the schema bounds matter.
-- **Check the image-token budget first; it may be the cheaper fix.** A Qwen-VL image costs roughly `h × w / (32 × 32)` tokens: a full-resolution 1080×1920 frame is ~2,000 tokens, eight of them ~16,000, far past a default Ollama `num_ctx`, and Ollama [#13084](https://github.com/ollama/ollama/issues/13084) shows Qwen3-VL producing garbage once image tokens exceed `num_ctx`. Downscale frames to ≤ 640 px on the long side (~300–400 tokens each), cap the count (6–8 per reel), and set the context explicitly.
-- **Could fail if:** neither sampling nor context is the cause (for example, prompts that ask for open-ended lists). The bounded schema covers that case.
-- **First step:** log prompt-token counts for the 20 reels that failed most recently; then rerun them with downscaled frames, and again through llama-server with the bounded schema, and compare valid-JSON rates.
+### 3. Fix Reel Brain's looping JSON at the source: image-token budget, sampling, quant, bounded schema
+- **Why:** two open issues match your stack closely. Ollama [#13084](https://github.com/ollama/ollama/issues/13084): Qwen3-VL 4B/8B on **Windows with an RTX 3080** produces "highly unsorted contents" or repeats short sentences once the prompt exceeds `num_ctx`; the reporter's images were 3236×2160 and the logs said "truncating input prompt". [QwenLM/Qwen3-VL#1611](https://github.com/QwenLM/Qwen3-VL/issues/1611): Qwen3-VL loops across runtimes (Transformers, Ollama, LM Studio, llama.cpp), more with **greedy decoding** and **low (4-bit) quants**; the same author ran GLM-4.6V-Flash on 500 cases with zero loops. A Qwen-VL image costs roughly `h × w / (32 × 32)` tokens, so a full-resolution 1080×1920 frame is ~2,000 tokens and eight of them ~16,000.
+- **Do:** (1) downscale frames to ≤ 640 px on the long side (~300–400 tokens each), cap at 6–8 per reel, set `num_ctx` explicitly and log prompt tokens per request; (2) use Qwen's recommended Instruct sampling (temperature 0.7, top-p 0.8, top-k 20, presence penalty 1.5), not temperature 0; (3) Q6_K or Q8_0 instead of Q4 if it fits (an 8B at Q8 is ~8.5 GB plus the projector); (4) a schema that cannot run away: `maxItems` on every array, `maxLength` on strings, enums, thinking off, a hard cap on output tokens; validate with Pydantic, retry once, then fall back to "free text → a second small call that only formats JSON"; (5) A/B GLM-4.6V-Flash (9B, MIT per model listings, GGUF available) on the same 20 reels.
+- **Correction from round 8:** earlier drafts blamed Ollama ignoring repetition penalties. That bug was real ([#15783](https://github.com/ollama/ollama/issues/15783)) but was **closed in July 2026 as obsoleted by Ollama 0.30.0, which moved its engine onto llama.cpp**. It only matters if your Ollama is older than 0.30: check `ollama --version`, and update if so. Ollama stays fine for this job; moving it behind llama-swap (Top 10 #6) is about sharing the GPU, not about JSON.
+- **Confidence: medium.** The issues match your hardware and model; nobody has run your prompts.
+- **Could fail if:** the prompts themselves invite open-ended lists or the model needs thinking to read the frames. The bounded schema and the GLM A/B cover those.
+- **First step:** record your Ollama version and the prompt-token count for the 20 reels that failed most recently, then rerun them with downscaled frames and the recommended sampling.
 
 ### 4. Move Hermes to llama.cpp with expert offload, and cut the tool list by hand
-- **Why:** Hermes now ships a managed llama.cpp runtime that places MoE expert weights in system RAM first and keeps attention and KV cache on the GPU, with a guaranteed ≥64K context and 15-minute idle unload ([local-models docs](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/local-models.md)). On a 12 GB RTX 3060, Qwen3.6-35B-A3B with `--n-cpu-moe 24` measured ~36 tok/s at 16K context ([DEV guide](https://dev.to/donald_lee_707b59c456e304/how-to-pick-n-cpu-moe-in-llamacpp-qwen36-35b-a3b-on-12-16-and-24-gb-gpus-43f3)); your 3080 Ti has ~2.5× the memory bandwidth. Hermes' own docs say prefill of the system prompt plus tool schemas dominates first-token time on local models, so the fixed prompt is the first thing to shrink: `hermes prompt-size` shows it, `hermes tools` and per-profile toolsets cut it.
+- **Why:** Hermes now ships a managed llama.cpp runtime that places MoE expert weights in system RAM first and keeps attention and KV cache on the GPU, with a guaranteed ≥64K context and 15-minute idle unload ([local-models docs](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/local-models.md)). On a 12 GB RTX 3060 **with 32 GB of DDR4**, users report Qwen3.6-35B-A3B generating at **28–47 tok/s** depending on `--n-cpu-moe` (a May 2026 r/LocalLLaMA sweep: ~46.8 tok/s at `-ncmoe 18` in llama-bench; InsiderLLM, Sep 2026: 28 at a default setting, 39 tuned); your 3080 Ti has ~2.5× the memory bandwidth, so expect at least that. Hermes' own docs say prefill of the system prompt plus tool schemas dominates first-token time on local models, so the fixed prompt is the first thing to shrink: `hermes prompt-size` shows it, `hermes tools` and per-profile toolsets cut it.
 - **Do not turn on Tool Search with Qwen models yet.** Its bridge tool is literally named `tool_call`, which collides with the `<tool_call>` tag in Qwen chat templates; Qwen models call the bridge malformed five times and the guardrail halts the turn ([#110442](https://github.com/NousResearch/hermes-agent/issues/110442), open; the rename to `invoke_tool` is in an unmerged PR). The documented workaround is `hermes config set tools.tool_search.enabled off`.
 - **Known Qwen3.6 + llama.cpp issues in Hermes, with workarounds:** pass `--chat-template-file` with the right Qwen template, not only `--jinja`, or output can be garbage ([#29677](https://github.com/NousResearch/hermes-agent/issues/29677)); leave `capabilities.answer_in_reasoning` unset, because a tool call stranded inside `<think>` still happened in **1 of 23 tool-call turns** ([#129440](https://github.com/NousResearch/hermes-agent/issues/129440)); `search_files` can loop when the model passes a glob as a regex ([#66129](https://github.com/NousResearch/hermes-agent/issues/66129)). Expect a few percent of turns to need a retry: "reliable" at 12 GB means "recovers well", not "never fails".
 - **Model:** Qwen3.6-35B-A3B (Apache-2.0, April 2026) if you have ≥32 GB RAM; it scores 81.2 on TAU2 agentic tool use against 68.2 for Gemma 4 26B-A4B (vendor-adjacent numbers). Otherwise Qwen3.5-9B (Apache-2.0, dense, hybrid attention so long context is cheap) fully on GPU.
@@ -112,7 +112,7 @@
 ### 10. Write Serato grids and cues with rb2serato's encoders
 - **Why:** [rb2serato](https://github.com/SM4RTENHEIMER/rb2serato) (MIT, Sep 2026) writes `Serato Markers2`, `Serato Markers_` and **locked** `Serato BeatGrid` tags whose bytes match what Serato writes, verified on a 9,600-track library, with undo logs and audio-byte checks. It also documents Serato 4's import quirks (crate header must be exactly `1.0/Serato ScratchLive Crate`, WAV typed `wave`, Serato closed while writing). That is the risky half of whatstheID's 4c plan, already done.
 - **Portability, checked in the source:** the encoders live in `src/rb2serato/seratotags.py`, which imports only `base64`, `struct` and `dataclasses` and says its output was verified byte-for-byte against files written by Serato DJ Pro 2.x–4.x; `encode_beatgrid` takes a list of markers, so multi-marker (tempo-change) grids are supported. The macOS-specific parts are elsewhere: `tagwriter.py` (APFS clone-and-swap) and `seratolib.py` (`/Volumes` paths). On Windows, vendor `seratotags.py` only and write your own safe writer with mutagen: copy → write tags → verify the audio payload is byte-identical → replace.
-- **Confidence: medium.** Encoders: high (verified output, pure Python). Windows writer and Serato 4's importer quirks: untested by anyone on Windows as far as I found.
+- **Confidence: medium.** The encoder code reads well and claims byte-for-byte verification, but rb2serato has **1 star and 0 forks**: it is one author's month-old project, and nobody else has confirmed the 9,600-track claim. The more-used alternative, [serato-tools](https://pypi.org/project/serato-tools/) (MIT, Python ≥3.12, 31 stars, can write beat grids and cues), has no stated Serato 4 support. Round-trip every write through two parsers (rb2serato's decoder and serato-tools) and Serato itself before trusting either.
 - **First step:** vendor `seratotags.py`, write a grid to a *copy* of one track, load it in Serato, confirm.
 
 ---
@@ -130,6 +130,7 @@
 - **Taste checklist:** [motionmaxxing](https://github.com/Tejashmakwana/motionmaxxing) (Apache-2.0) lists the tells of AI motion graphics ("everything is a slide", typed-out headlines with a caret, a new flat colour per scene) and its counter-rules (one idea, light and texture, measured motion, cut on motion). Use it as a QA rubric for your existing motion-graphics QA step.
 - **Type that doesn't look default:** libre foundries Velvetyne (OFL/GPL per font), Collletttivo (free for commercial use), Use & Modify (curated list; check each licence). Pick one display face and one text face per client and never change them mid-series.
 - **Multicam in FilmCraft:** upstream already has `clip.createMulticam` and `multicam.cutToCamera`; drive those from the plan instead of building cuts by hand.
+- **Talking-head / podcast path:** [FunClip](https://github.com/modelscope/FunClip) (MIT, 6.4k stars) for transcript-driven clipping; for active-speaker multicam, [Cutcast](https://github.com/BoazCohenJ/Cutcast) (MIT, Windows, syncs cameras by audio and cuts to whoever talks) and [podcast-editor](https://github.com/vamshicreates/podcast-editor) (MIT) show the method (per-mic RMS dominance, cross-correlation sync), but both have 0–1 stars: read them, don't depend on them. Your existing cross-correlation sync already covers half of it.
 
 **Shot picking from two synced angles (proposal)**
 1. Per shot window (aligned to bars): sharpness (Laplacian variance), exposure, motion energy, face/pose visibility, hands-up count (wrists above head from pose), strobe flashes.
@@ -164,7 +165,7 @@
 | Taste head | SigLIP base + logistic | Apache-2.0 | < 1 GB |
 | Stills (commercial) | FLUX.2 klein 4B / Z-Image-Turbo | Apache-2.0 | ~8–13 GB / ~6–10 GB quantized |
 | Video gen (personal) | MiniMax H3 Q4 GGUF | MiniMax community licence | ~11.6 GB file + offload |
-| Egyptian Arabic / code-switched speech | [QwenCleo-ASR](https://github.com/MohammedAly22/qwencleo-asr) (Qwen3-ASR-1.7B fine-tune) or Cohere Transcribe Arabic (2B, 2026-07) | Apache-2.0 / Apache-2.0 | ~4–6 GB |
+| Egyptian Arabic / code-switched speech | [QwenCleo-ASR](https://github.com/MohammedAly22/qwencleo-asr) (Qwen3-ASR-1.7B fine-tune; 19 stars, self-reported benchmark) or Cohere Transcribe Arabic (2B, 2026-07) | Apache-2.0 / Apache-2.0 | ~4–6 GB |
 | English speech + word timings | faster-whisper / whisperX large-v3 | MIT / BSD-2 | ~3–5 GB |
 
 **Auto-posting: what the platforms allow**
@@ -212,7 +213,7 @@
 ### 2.3 Reel Brain
 
 **Adopt**
-- llama.cpp for the VLM with bounded schemas (Top 10 #3).
+- Frame-token budget, Qwen's recommended sampling, a higher quant and bounded schemas for the VLM (Top 10 #3). Try **GLM-4.6V-Flash** (9B, MIT per listings) beside Qwen3-VL-8B.
 - **Try Qwen3.5-9B against Qwen3-VL-8B** on 30 reels: Qwen says 3.5's early-fusion training beats Qwen3-VL on visual understanding (vendor claim). MiniCPM-V 4.5 (8.7B, reports 73.5 on Video-MME, llama.cpp support since b6282) is the video-specialised alternative; its weights have historically been under the custom MiniCPM Model License (commercial use after a registration form), which is fine for a personal pipeline.
 - Linear probe + top-3 classification; repo verification with a "no repo" outcome (below).
 - Port ideas from juspay/dopamine: link resolver that remembers failed lookups, verifier, project mapper with "avoid".
@@ -222,7 +223,7 @@
 **Classification and repo linking**
 - **Why:** kNN at 63 % is a weak baseline. A logistic-regression "linear probe" on the same embeddings usually beats kNN once you have ~1,000 labels; showing the top 3 turns a 63 % top-1 into a much higher hit rate for one click. For repos, a published study (SONAD) found LLMs over-accept candidates (precision 68 %, recall 97 %) while a feature-based verifier reached 82 % precision.
 - **Do:** (a) re-label 50 random reels blind to find your own consistency ceiling; (b) linear probe + top-3 + LLM rerank only when the top-2 margin is small; (c) for repos, three tiers: **first** regex the OCR text, caption and transcript for explicit `github.com/owner/repo`, `owner/repo` and Hugging Face `org/model` strings and confirm they exist (tech reels very often show the repo page on screen); **then** candidates from GitHub/Hugging Face search, scored on exact name match, owner, README similarity to the reel's context and stars; **else** "no repo" (many tools in reels are closed SaaS products). Your whatstheID `verify.py` already encodes the right rules (empty is a refusal, exact-match preference, word-level coverage × precision).
-- **Borrow:** [juspay/dopamine](https://github.com/juspay/dopamine) (MIT, active) is the same pipeline on Gemini; its project mapper (embedding prefilter + judge with an "avoid" field per project) is what your per-project ranking needs.
+- **Borrow ideas from:** [juspay/dopamine](https://github.com/juspay/dopamine) (MIT, active, but **1 star**: a fresh repo, not a proven tool), the same pipeline on Gemini; its project mapper (embedding prefilter + judge with an "avoid" field per project) is the shape your per-project ranking needs.
 - **Confidence: medium.**
 - **First step:** the 50-item blind re-label.
 
@@ -298,14 +299,114 @@ What you already have (from the repo): shazamio + AudD, your own landmark finger
 5. **whatstheID as a product: not yet.** The tracklist space is crowded (TrackSniff $9–19/month, AudD, Mixprism), Lexicon's free tier converts libraries, and payouts for software sales from Egypt are unclear. Open-source the Serato grid writer for reputation if you like; sell analysis or setup as a service later.
 
 ## 5. What I got wrong along the way
-(Filled in by the audit rounds.)
 
-## 6. Still uncertain
-- System RAM (decides the Hermes model).
-- Qwen-Image 2.1's licence text on the official card.
-- Whether Trial Reels are available to your account.
-- MiniMax H3 licence text for Egypt.
-- Whether Serato's history `start_time` is precise enough to seed alignment.
+The biggest calls the audits killed or reversed (details and dates in `audit-log.md`):
+
+1. **"Ollama ignores repetition penalties, so switch servers to stop the looping JSON."** True once, fixed in Ollama 0.30.0 (July 2026). The likelier causes on your exact stack are image tokens overflowing `num_ctx` (an open issue reproduced on an RTX 3080 under Windows), greedy decoding and 4-bit quants. *Watch for:* bug reports age fast; check the closing comment, not just the title.
+2. **"Turn on Hermes Tool Search to shrink the prompt."** It breaks Qwen models: the bridge tool is named `tool_call`, the same word as Qwen's template tag. *Watch for:* features that work with the vendor's default model and not with yours.
+3. **"Let a local VLM judge rank the three variants."** Agents judging edits from stills fail mostly on craft (Timeline-Bench), and pairwise judges flip with presentation order. Demoted to a defect checker. *Watch for:* using a model to grade taste.
+4. **"Write a GPU broker."** llama-swap already does it, ComfyUI included. *Watch for:* building infrastructure before searching for it.
+5. **"Replace Laya with embeddings + logistic regression."** Written before I knew what Laya was. Laya is built to be fine-tuned; the real problem is that it runs zero-shot. *Watch for:* advice about a component nobody has looked at.
+6. **"rb2serato is verified on 9,600 tracks, use its encoders."** Still the best code I found, but it has one star and one author. *Watch for:* confident READMEs with no users.
+7. **"The collective is the first income."** Local reel editing goes for as little as 100 EGP; it is a portfolio play. The dollars are in Arabic-dialect clips for remote clients.
+8. **"Qwen3.6 runs at ~36 tok/s on a 12 GB card."** I couldn't trace that number to a source; replaced with traceable reports of 28–47 tok/s on a 3060 with 32 GB RAM.
+9. **"Use HyperFrames' transparent WebM in FilmCraft."** FilmCraft drops VP9 alpha; use ProRes 4444.
+10. **"AutoFlip drifts more than an L1 path."** My own unsupported claim; removed. AutoFlip has also been unsupported since 2023.
+
+## 6. Still uncertain (and what would settle it)
+
+| Claim | Why uncertain | What settles it |
+|---|---|---|
+| Qwen-Image 2.1 is research-only | Many secondary sources; Hugging Face card unreadable from my tools | The licence block on the official model card |
+| MiniMax H3 bars local use in the US/EU/UK/South Korea, not Egypt | Secondary reports; licence text on Hugging Face unread | Read `LICENSE` on the H3 model card |
+| Laya's gain on your routes | Its README benchmarks are on other tasks | Your 200 hand-checked routes before and after fine-tuning |
+| Your RAM is ≥ 32 GB | Unknown | Task Manager → Performance → Memory |
+| Trial Reels available to your account | Eligibility reports conflict; nothing Egypt-specific | The "Trial" toggle when you share a reel |
+| Instagram's API publishes reels with their own audio | One third-party claim says no | One API test post |
+| Upwork Direct-to-Local-Bank in EGP | Official list truncated; 2020 forum evidence only | Upwork → Settings → Get Paid |
+| What a Cairo collective will pay | No published prices | Money path 1's first test |
+| Timeline-Bench agreement figures | Read via search snippets; arXiv blocked to my fetch tool | The paper's judge section |
+| Serato history `start_time` precision | Integer seconds in the schema; unit not documented | Compare one session's rows with your recording |
+| QwenCleo-ASR's 19.9 % WER | Self-reported by a 19-star repo on its own test set | 10 minutes of your own Egyptian audio, scored by hand |
 
 ## 7. Sources
-(Consolidated in the final round; links are inline above.)
+
+### Repo facts (checked 2026-10-14)
+Stars from the GitHub page; last commit and licence from a shallow clone. "Win / 12 GB" is my read of fit.
+
+| Repo | Stars | Last commit | Licence | Win / 12 GB | Used for |
+|---|---|---|---|---|---|
+| [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) | 253.5k | 2026-10-13 | MIT | yes | agent |
+| [NandhaKishorM/laya](https://github.com/NandhaKishorM/laya) | 32.8k | 2026-10-12 | Apache-2.0 | yes (CPU) | router |
+| [mostlygeek/llama-swap](https://github.com/mostlygeek/llama-swap) | 5.9k | 2026-10-12 | MIT | yes (WinGet) | GPU sharing |
+| [heygen-com/hyperframes](https://github.com/heygen-com/hyperframes) | 62.9k | 2026-10-13 | Apache-2.0 | yes (Node ≥22) | motion graphics |
+| [Tejashmakwana/motionmaxxing](https://github.com/Tejashmakwana/motionmaxxing) | 401 | 2026-10-06 | Apache-2.0 | yes | QA rubric |
+| [CPJKU/beat_this](https://github.com/CPJKU/beat_this) | 421 | 2026-05-28 | MIT (weights too) | yes, < 1 GB | beats |
+| [mir-aidj/all-in-one](https://github.com/mir-aidj/all-in-one) | 860 | 2023-10-10 | MIT | NATTEN from source | avoid |
+| [CPJKU/madmom](https://github.com/CPJKU/madmom) | 1.7k | 2024-08-25 | BSD code, non-commercial models | old Python | avoid |
+| [Tau-J/rtmlib](https://github.com/Tau-J/rtmlib) | 684 | 2026-08-03 | Apache-2.0 | yes (ONNX) | pose |
+| [Breakthrough/PySceneDetect](https://github.com/Breakthrough/PySceneDetect) | 5.2k | 2026-10-12 | BSD-3 | yes, CPU | shot detection |
+| [facebookresearch/sam2](https://github.com/facebookresearch/sam2) | 20.0k | 2024-12-15 | Apache-2.0 | yes | click-to-track |
+| [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics) | – | 2026-10-14 | AGPL-3.0 | yes | avoid near the fork |
+| [modelscope/FunClip](https://github.com/modelscope/FunClip) | 6.4k | 2026-10-08 | MIT | yes | podcast clipping |
+| [BoazCohenJ/Cutcast](https://github.com/BoazCohenJ/Cutcast) | 1 | 2026-10-12 | MIT | Windows | reference only |
+| [vamshicreates/podcast-editor](https://github.com/vamshicreates/podcast-editor) | 0 | 2026-09-30 | MIT | yes | reference only |
+| [calesthio/OpenMontage](https://github.com/calesthio/OpenMontage) | 68.0k | 2026-10-12 | AGPL-3.0 | yes | ideas only |
+| [WyattBlue/auto-editor](https://github.com/WyattBlue/auto-editor) | 5.5k | 2026-10-12 | Unlicense | yes | silence cutting |
+| [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper) | 25.8k | 2026-10-10 | MIT | yes, 3–5 GB | English ASR |
+| [m-bain/whisperX](https://github.com/m-bain/whisperX) | 24.5k | 2026-09-26 | BSD-2 | yes | word timings |
+| [MohammedAly22/qwencleo-asr](https://github.com/MohammedAly22/qwencleo-asr) | 19 | 2026-06-17 | Apache-2.0 | yes, ~4–6 GB | Egyptian ASR |
+| [gitroomhq/postiz-app](https://github.com/gitroomhq/postiz-app) | 37.2k | 2026-10-12 | AGPL-3.0 | Docker | scheduling |
+| [MiniMax-AI/MiniMax-H3](https://github.com/MiniMax-AI/MiniMax-H3) | 9.9k | 2026-08-15 | MiniMax H3 Community | 12 GB floor, 768p | personal only |
+| [QwenLM/Qwen-Image](https://github.com/QwenLM/Qwen-Image) | 8.4k | 2026-02-10 | Apache-2.0 (code; 2.1 weights reportedly research-only) | GGUF Q4 | stills |
+| [juspay/dopamine](https://github.com/juspay/dopamine) | 1 | 2026-10-14 | MIT | Node + Gemini | ideas only |
+| [bitbonsai/mcpvault](https://github.com/bitbonsai/mcpvault) | 1.7k | 2026-10-09 | MIT | yes (Node) | vault MCP |
+| [cyanheads/obsidian-mcp-server](https://github.com/cyanheads/obsidian-mcp-server) | 695 | 2026-10-05 | Apache-2.0 | yes | vault MCP alt. |
+| [basicmachines-co/basic-memory](https://github.com/basicmachines-co/basic-memory) | 4.2k | 2026-10-12 | AGPL-3.0 | yes | memory alt. |
+| [SM4RTENHEIMER/rb2serato](https://github.com/SM4RTENHEIMER/rb2serato) | 1 | 2026-09-27 | MIT | macOS-tested | Serato encoders |
+| [serato-tools](https://pypi.org/project/serato-tools/) ([repo](https://github.com/bvandercar-vt/serato-tools)) | 31 | 2026-10-04 | MIT | yes (Py ≥3.12) | Serato tags |
+| [Holzhaus/serato-tags](https://github.com/Holzhaus/serato-tags) | 93 | 2020-08-20 | MIT | – | format docs |
+| [chrisle/serato-connect](https://github.com/chrisle/serato-connect) | 7 | 2026-09-27 | MIT | – | Serato reader |
+| [whatsnowplaying/whats-now-playing](https://github.com/whatsnowplaying/whats-now-playing) | 100 | 2026-09-29 | MIT | yes | Serato history reader |
+| [dylanljones/pyrekordbox](https://github.com/dylanljones/pyrekordbox) | 495 | 2026-10-08 | MIT | yes | Rekordbox |
+| [ETH-DISCO/cue-detr](https://github.com/ETH-DISCO/cue-detr) | 32 | 2024-08-19 | MIT (code) | yes | cue points |
+| [guillemcortes/peaknetfp](https://github.com/guillemcortes/peaknetfp) | 14 | 2025-12-05 | CC BY-NC-SA 4.0 | yes | personal only |
+| [JorenSix/Panako](https://github.com/JorenSix/Panako) | 269 | 2026-09-17 | AGPL-3.0 | Java | ideas only |
+| [mir-aidj/djmix-analysis](https://github.com/mir-aidj/djmix-analysis) | 62 | 2020-10-21 | none | – | ideas only |
+| [jberg/butterchurn](https://github.com/jberg/butterchurn) | 2.0k | 2026-04-19 | MIT | WebGL | visualiser ref. |
+| [obsidianmd/jsoncanvas](https://github.com/obsidianmd/jsoncanvas) | 3.7k | 2026-07-24 | MIT | – | board format |
+| [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) | 133.8k | 2026-10-12 | MIT | web | canvas alt. |
+| [tldraw/tldraw](https://github.com/tldraw/tldraw) | 50.9k | 2026-10-13 | tldraw licence (key in production) | web | canvas alt. |
+
+### Papers and studies
+- Beat This!: [arXiv 2407.21658](https://arxiv.org/abs/2407.21658); Giant Steps run: [beat_this#13](https://github.com/CPJKU/beat_this/issues/13); weights licence: [beat_this#16](https://github.com/CPJKU/beat_this/issues/16)
+- Raveform (EDM in DJ mixes): [TISMIR](https://transactions.ismir.net/articles/10.5334/tismir.288)
+- Kim et al., mix-to-track alignment: [arXiv 2008.10267](https://arxiv.org/abs/2008.10267)
+- Schwarz & Fourer, DJ-mix reverse engineering: [HAL](https://hal.archives-ouvertes.fr/hal-02172427); multi-pass NMF: [arXiv 2410.04198](https://arxiv.org/pdf/2410.04198)
+- Grundmann et al., L1-optimal camera paths: [Google Research](https://research.google/pubs/pub37041/); AutoFlip: [Google blog](https://opensource.googleblog.com/2020/02/autoflip-open-source-framework-for.html), legacy status: [MediaPipe guide](https://ai.google.dev/mediapipe)
+- Timeline-Bench (agents editing raw footage): [arXiv 2609.35143](https://arxiv.org/abs/2609.35143)
+- LLM-judge position bias: [J1, arXiv 2505.10320](https://arxiv.org/pdf/2505.10320); [Judging the Judges](https://arxiv.org/html/2406.07791v7)
+- Engagement prediction limits: [Frontiers 2026](https://www.frontiersin.org/journals/artificial-intelligence/articles/10.3389/frai.2026.1896199/full); [VQualA 2025](https://www.researchgate.net/publication/395244316_VQualA_2025_Challenge_on_Engagement_Prediction_for_Short_Videos_Methods_and_Results)
+- Editor-preference learning (CLIP + SVM): [IEEE 11418344](https://ieeexplore.ieee.org/document/11418344/)
+- SONAD, software-mention linking: [UPM](https://oa.upm.es/90236/)
+- CUE-DETR / EDM-CUE: [arXiv 2407.06823](https://arxiv.org/abs/2407.06823); PeakNetFP: [arXiv 2506.21086](https://arxiv.org/abs/2506.21086)
+
+### Issues and docs that carry the key claims
+- Ollama: [#13084](https://github.com/ollama/ollama/issues/13084), [#15783](https://github.com/ollama/ollama/issues/15783), [#14493](https://github.com/ollama/ollama/issues/14493), [#10929](https://github.com/ollama/ollama/issues/10929); 0.30.0 engine change: [InsiderLLM](https://insiderllm.com/guides/ollama-0-30-0-whats-new/)
+- Qwen3-VL loops: [QwenLM/Qwen3-VL#1611](https://github.com/QwenLM/Qwen3-VL/issues/1611); recommended sampling: [Unsloth guide](https://unsloth.ai/docs/models/tutorials/qwen3-how-to-run-and-fine-tune/qwen3-vl-how-to-run-and-fine-tune); image-token formula: [Alibaba Model Studio](https://help.aliyun.com/en/model-studio/vision-model/); GLM-4.6V-Flash: [listing](https://llmrun.dev/model/zai-org-glm-4-6v-flash)
+- Hermes: [local models](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/local-models.md), [memory providers](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory-providers.md), [tool search](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/tool-search.md), [kanban](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/kanban.md), [goals](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/goals.md), [cron](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/cron.md), [fallback providers](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/fallback-providers.md); issues [#110442](https://github.com/NousResearch/hermes-agent/issues/110442), [#129440](https://github.com/NousResearch/hermes-agent/issues/129440), [#29677](https://github.com/NousResearch/hermes-agent/issues/29677), [#66129](https://github.com/NousResearch/hermes-agent/issues/66129), [#107125](https://github.com/NousResearch/hermes-agent/issues/107125); v0.21 releases: [releases.sh](https://releases.sh/nousresearch/hermes-agent.md)
+- Laya: [README](https://github.com/NandhaKishorM/laya), [#963](https://github.com/NandhaKishorM/laya/issues/963), [#919](https://github.com/NandhaKishorM/laya/issues/919)
+- Qwen3.6 on 12 GB: [r/LocalLLaMA sweep (snapshot)](https://reddit.sentinel-team.org/posts/1t7l56a/snapshots/2026-05-15T23%3A40%3A01.25497Z), [InsiderLLM 3060 test](https://insiderllm.com/pdfs/qwen3-6-35b-a3b-gtx-1650-4gb-vs-rtx-3060.pdf); TAU2 comparison: [regolo.ai](https://regolo.ai/gemma-4-31b-vs-qwen3-6-35b-a3b-when-to-use-which/); Qwen3.6 licence: [noze.it](https://www.noze.it/en/insights/qwen-3-6/); Qwen3.5 family: [The Batch](https://www.deeplearning.ai/the-batch/alibabas-latest-flagship-models-are-open-weights-moe-performers-in-sizes-from-less-than-1b-parameters)
+- Serato: history reader [whats-now-playing reader.py](https://github.com/whatsnowplaying/whats-now-playing/blob/main/nowplaying/serato/reader.py); MC4000 → Lite: [Serato](https://serato.com/dj/hardware/denon-dj-mc4000); Lite has no recorder: [djgear2k](https://djgear2k.com/serato-dj-lite-vs-serato-dj-pro/); Lite 4.0 History panel: [release notes](https://serato.com/dj/lite/downloads/4.0.0/releasenotes); Serato 4 library location: [MixGoat](https://mixgoat.com/guides/export-serato-crates-and-library)
+- FilmCraft: gap list `docs/gaps.md` in this repo; Arabic titles [storytold/filmcraft#395](https://github.com/storytold/filmcraft/issues/395)
+- Licences: Qwen-Image 2.1 [latenode](https://latenode.com/ai-trends/qwen-image-2-1-commercial-licence), [techaiwire](https://techaiwire.com/articles/qwen-research-license-explained/); FLUX.2 klein [VentureBeat](https://venturebeat.com/technology/black-forest-labs-launches-open-source-flux-2-klein-to-generate-ai-images-in); Z-Image-Turbo [ComfyUI wiki](https://comfyui-wiki.com/en/models/z-image/z-image-turbo); MiniMax H3 [mer.vin](https://mer.vin/news/minimax-h3-open-weight-video-model-blocked-us-eu-uk/), [12 GB guide](https://runaihome.com/blog/minimax-h3-comfyui-gguf-workflow-tutorial-2026/); Cohere Transcribe Arabic [Cohere](https://cohere.com/blog/transcribe-arabic); tldraw [licence key](https://tldraw.dev/sdk-features/license-key)
+- Publishing: [Instagram content publishing](https://developers.facebook.com/docs/instagram-platform/content-publishing); [TikTok content sharing guidelines](https://developers.tiktok.com/docs/en/content-sharing-guidelines); [YouTube unverified-app uploads](https://www.ayrshare.com/solutions/google-api-error-403-unverified-app-how-to-fix-the-audit-pipeline/); [Trial Reels](https://www.lindseygamble.com/blog/instagram-launches-trial-reels-giving-creators-the-ability-to-share-reels-with-non-followers-before-sharing-with-everyone)
+- GPU and audio: ComfyUI free endpoint [RunComfy docs](https://docs.runcomfy.com/serverless/instance-proxy-endpoints); DPC latency [Blue Cat Audio](https://www.bluecataudio.com/Blog/?p=4390); 3080 Ti transients [Level1Techs](https://forum.level1techs.com/t/think-i-have-a-dud-3080ti-you-tell-me/190443); GDDR6X pads [Igor's Lab](https://www.igorslab.de/en/simple-pad-mod-for-the-force-rtx-3080-founders-edition-slowers-the-gddr6x-temperature-by-a-whopping-8-degrees/); clock locking [Zivid](https://support.zivid.com/support/unstable-capture-time-windows.html)
+- DJ tools: [Lexicon 1.10](https://www.digitaldjtips.com/lexicon-1-10-brings-serato-4-0-support-track-timeline-play-history/); [TrackSniff](https://www.digitaldjtips.com/tracksniff-shazam-alternative/); [AudD](https://audd.io/); [rbxport](https://rbxport.com/); slskd licence [AUR](https://aur.archlinux.org/pkgbase/slskd-bin)
+- Canvas: [JSON Canvas spec](https://github.com/obsidianmd/jsoncanvas/blob/main/spec/1.0.md); [Eagle store](https://eagle.cool/store); [Pinterest access tiers](https://developers.pinterest.com/docs/key-concepts/access-tiers/); [Instagram export guide](https://takeoutday.org/guides/how-to-export-instagram-data); type foundries [Velvetyne FAQ](https://velvetyne.alwaysdata.net/about/faq/), [Collletttivo](https://collletttivo.it/journal/open-source-hyper-capitalism)
+
+### Money
+- [YouTube Partner Program countries](https://support.google.com/youtube/answer/13429240); Facebook creator programme in Egypt: [Nation](https://nation.africa/kenya/business/technology/ruto-facebook-instagram-to-start-paying-kenyan-content-creators-4461870)
+- Payouts: [Payoneer vs Wise in Egypt](https://xpay.app/blog/wise-or-payoneer-egypt), [Payoneer alternatives](https://www.cenoa.com/blog/payoneer-alternatives-egypt-2026-guide-freelancers), [PayPal in Egypt](https://xpay.app/blog/paypal-egypt-alternatives), [Upwork local bank](https://support.upwork.com/hc/en-us/articles/211063888), [Upwork fees](https://golance.com/blogs/upwork-fees-explained-2026), [Fiverr in Egypt](https://www.raenest.com/blog/how-to-receive-fiverr-payments-in-egypt), [InstaPay limits](https://enterpriseam.com/egypt/?p=609939), [Gumroad PayPal exclusions](https://www.mintlify.com/antiwork/gumroad/payments/paypal), [Lemon Squeezy countries](https://docs.lemonsqueezy.com/help/getting-started/supported-countries), [Egyptian card limits](https://techpoint.africa/2024/01/17/egyptian-banks-impose-card-limits/)
+- Prices and demand: [Upwork Arabic clip job ($50)](https://www.upwork.com/jobs/~022063317379875817148), [Arabic doc editor ($10–25/h)](https://www.upwork.com/freelance-jobs/apply/Arabic-and-English-storytelling-video-editor-Mini-documentary-seroes_~022069460820553864681/), [Saudi EdTech retainer](https://www.upwork.com/freelance-jobs/apply/Arabic-Video-Editor-Motion-Graphics-Designer-Long-Term-Weekly-Work-Saudi-EdTech_~022082945813408227255/), [Fiverr podcast shorts](https://block.fiverr.com/gigs/podcast-shorts), [Khamsat reels editing](https://khamsat.com/services/%D9%85%D9%88%D9%86%D8%AA%D8%A7%D8%AC-%D8%B1%D9%8A%D9%84%D8%B2), [podcast clipping prices](https://openclip.app/clipping/podcast-clipping), [OpenClaw setup gig](https://fiverr.com/customer1995/help-you-set-up-openclaw), [Upwork Cairo videographers](https://www.upwork.com/hire/videographers/eg/cairo/)
+- Cairo scene: [SceneNoise on Geeza](https://scenenoise.com/Features/How-Geeza-is-NOT-So-Quietly-Reimagining-Cairo-s-Underground-Clubbing), [MOSHTRQ](https://scenenoise.com/News/Underground-Collective-MOSHTRQ-hosts-massive-takeover-event-on-May-14), [INTG](https://scenenoise.com/News/Cairo-s-INTG-Party-Series-to-Launch-with-All-Live-DJ-Showcase-Aug-25)

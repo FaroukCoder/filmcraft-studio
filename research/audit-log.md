@@ -182,7 +182,7 @@ clips, Laya fixed or removed, heavy coding stays on Claude Code).
 **Consistency fix:** Hermes (Top 10 #4) now points at llama-swap so it doesn't hold the card outside the shared
 scheduler.
 
-## Round 7 — money audit (02:24–02:33 UTC)
+## Round 7 — money audit (02:24–02:26 UTC)
 
 **Checked:** YouTube Partner Program country list (Egypt included), Instagram/Facebook monetisation (Egypt not
 confirmed for either), Payoneer fees (~1 % + ~1.85–2 % FX), Upwork fees (variable 0–15 %, $0.99 local bank
@@ -204,4 +204,34 @@ race to the bottom; Egyptian-dialect captions are the differentiator. Agent-setu
 
 **Unverified:** Upwork Direct-to-Local-Bank in EGP for 2026; current InstaPay caps; Instagram creator monetisation in
 Egypt; any real price a Cairo collective has paid for clips (no source exists; the first test produces it).
+
+## Round 8 — link and claim check (02:27–02:36 UTC)
+
+**Method:** extracted every URL from the report; opened GitHub pages for stars and issue states (WebFetch works for
+github.com, not for most other hosts); shallow-cloned repos for last-commit dates and licence files; read PyPI JSON
+for licence expressions; re-searched any number I could not trace.
+
+**Killed or reversed**
+- **Top 10 #3's premise.** Ollama #15783 (penalties ignored) was **closed in July 2026, "obsoleted by the switch to
+  llama-server in 0.30.0"**. The move is now "fix the looping JSON at the source": image-token overflow (Ollama
+  #13084, open, reproduced on an RTX 3080 under Windows, the same card family and OS as yours), greedy decoding and
+  4-bit quants (QwenLM/Qwen3-VL#1611), plus a GLM-4.6V-Flash A/B. Ollama's #10929 (thinking + format) is also closed.
+- **"~36 tok/s at --n-cpu-moe 24 on a 3060"**: could not trace it to a source. Replaced with traceable reports
+  (28–47 tok/s on a 3060 with 32 GB DDR4).
+- **Adoption reality check** (stars): rb2serato **1**, juspay/dopamine **1**, Cutcast **1**, podcast-editor **0**,
+  QwenCleo-ASR **19**, CUE-DETR **32**, serato-tools **31**. Each now carries that caveat; rb2serato's confidence
+  text was rewritten ("one author's month-old project; round-trip every write through two parsers").
+
+**Confirmed**
+- Beat This weights MIT (#16); Giant Steps numbers (#13); Hermes issues #110442, #129440, #29677 as described;
+  whats-now-playing's `history_entry` query; JSON Canvas node types; Hermes local-models doc text.
+- madmom: BSD code but **CC BY-NC-SA 4.0 models** (read the LICENSE file).
+- serato-tools: MIT via PyPI `license_expression`, Python ≥ 3.12.
+
+**Restored:** links to FunClip, Cutcast and podcast-editor that the round-7 money rewrite had dropped.
+
+**Added:** a repo-facts table (stars, last commit, licence, Windows/12 GB fit) and a full source list to the report.
+
+**Still unverifiable from here:** Hugging Face model cards (Qwen-Image 2.1, MiniMax H3, GLM-4.6V-Flash, MiniCPM-V
+4.5), arXiv full texts, dev.to. Claims that depend on them are marked in the "Still uncertain" table.
 
