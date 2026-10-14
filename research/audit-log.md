@@ -995,3 +995,23 @@ appearing in `saved_posts.json`. Field names weren't confirmed from Meta's own d
 check them on your own export.
 
 **Confidence changes:** none; one Reel Brain step now won't silently garble your Arabic collections.
+
+## Round 43 — money, second hostile pass (05:23–05:25 UTC)
+
+**Attack:** re-read section 4 as a client and as a payments clerk would.
+- **Payoneer's marketplace fee** was stated as "~1 %"; its own fee page says "varies by marketplace". Now "up to ~1 %".
+- **Upwork's EGP withdrawal** was "check your settings"; a 2026 Egypt fee guide lists Direct-to-Local-Bank in EGP at
+  $0.99 (Payoneer from Upwork ≈ $2). Still says to confirm in Get Paid.
+- **Path 2's edge** quoted QwenCleo's 19.9 % vs 63.9 % WER with no caveat in this section; it is self-reported by a
+  19-star repo's author. Caveat added where the money claim is made.
+- **Path 3's track IDs for DJs abroad** assumed their Serato history; Serato's History panel exports a session as
+  text, CSV or M3U (support article), but I could not confirm the CSV has start times. The path now says to ask for
+  the export with the video and to place IDs by ear at transitions if it has only the order.
+- **Path 1 gains a bundle:** the next event's flyer or announcement still from FLUX.2 klein 4B (Apache-2.0, so
+  sellable), which ties the money path to Top 10 #1 and costs one ComfyUI run.
+- **Not changed:** five paths, each (except "not yet" for whatstheID) with a one-week test; Egypt availability
+  facts from rounds 7, 13 and 32 still hold (Stripe Global Payouts EG and Gemini regions re-confirmed in round 37).
+- **Also decided:** Top 10 #9 can't be tested on real club footage from here (YouTube, Vimeo, Wikimedia and stock
+  sites are unreachable; OpenCV's pedestrian sample isn't a DJ booth), so it stays "synthetic only".
+
+**Confidence changes:** none.
