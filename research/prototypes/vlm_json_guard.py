@@ -58,9 +58,28 @@ class ReelNote(BaseModel):
     language: Literal["en", "ar", "mixed", "other"]
 
 
+def _inline_refs(node, defs: dict, depth: int = 0):
+    """Replace every {"$ref": "#/$defs/X"} with X itself. llama.cpp's JSON-schema-to-grammar
+    converter (used by llama-server and by Ollama since 0.30) documents nested $refs as broken and
+    skips what it can't convert silently, so the bounds below would quietly stop applying."""
+    if depth > 20:
+        raise ValueError("schema nests too deep")
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            target = dict(defs[ref.split("/")[-1]])
+            extra = {k: v for k, v in node.items() if k != "$ref"}
+            return _inline_refs({**target, **extra}, defs, depth + 1)
+        return {k: _inline_refs(v, defs, depth + 1) for k, v in node.items() if k != "$defs"}
+    if isinstance(node, list):
+        return [_inline_refs(v, defs, depth + 1) for v in node]
+    return node
+
+
 def bounded_schema() -> dict:
-    """Pydantic's schema plus per-item string bounds (maxItems comes from max_length)."""
-    schema = ReelNote.model_json_schema()
+    """Pydantic's schema, $refs inlined, plus per-item string bounds (maxItems comes from max_length)."""
+    raw = ReelNote.model_json_schema()
+    schema = _inline_refs(raw, raw.get("$defs", {}))
     props = schema["properties"]
     props["takeaways"]["items"]["maxLength"] = 160
     props["topics"]["items"]["maxLength"] = 40

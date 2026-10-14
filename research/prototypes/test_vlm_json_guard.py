@@ -65,6 +65,13 @@ def make_video(path: Path) -> None:
 
 def main() -> int:
     problems = []
+    # llama.cpp's schema-to-grammar converter skips nested $refs silently: the schema sent must have none
+    schema_text = json.dumps(g.bounded_schema())
+    if "$ref" in schema_text or "$defs" in schema_text:
+        problems.append("bounded_schema() still contains $ref/$defs")
+    tool_kind = g.bounded_schema()["properties"]["tools"]["items"]["properties"]["kind"]
+    if "enum" not in tool_kind or g.bounded_schema()["properties"]["tools"].get("maxItems") != 8:
+        problems.append(f"inlined schema lost its enum or maxItems: {tool_kind}")
     with tempfile.TemporaryDirectory() as tmp:
         video = Path(tmp) / "reel.mp4"
         make_video(video)

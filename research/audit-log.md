@@ -630,3 +630,20 @@ tag would hide `research/` (it only exists on this branch).
 
 **Open:** the seam was tested on the fork's own base (0.6.0 lineage), not on v0.7.2, which the report tells you to
 sync to. A v0.7.2 build is running to re-test it.
+
+## Round 25 — canvas imports, Cairo prices, and the bounded schema that wasn't (03:57–04:05 UTC)
+
+- **Inspiration Canvas:** found **EaglePack Importer**, an Obsidian community plugin that turns an Eagle `.eaglepack`
+  into one note per item (image embedded) plus a gallery note. Added as a lead, not a recommendation: its source
+  repository and licence could not be found. Eagle's on-disk layout (`images/<id>.info/metadata.json` beside the file)
+  noted from a third-party description, so your own exporter stays a small fallback.
+- **Money, local prices:** searched in Arabic and English for Cairo event-reel prices in EGP. Nothing new: Khamsat
+  listings stay at $5–40 per reel, and the "Cairo videographer prices" pages are a US agency's SEO pages in dollars,
+  not local rates. No change; path 1's first test (three local quotes) stays the evidence.
+- **What broke — Top 10 #4's "bounded schema":** llama.cpp's grammar docs say `maxItems` / `maxLength` are enforced
+  but **nested `$ref`s are broken (#8073) and unsupported parts are skipped silently**. Pydantic emits nested `$ref`s
+  for nested models and enums, and `vlm_json_guard.py` was sending exactly that (ReelNote → Tool → ToolKind), so the
+  tool list's bounds could silently not apply. Fixed: refs are inlined before the schema goes out; the test now fails
+  if any `$ref`/`$defs` remains and checks the enum and `maxItems` survive. Report updated.
+
+**Confidence changes:** Top 10 #4 unchanged (medium), but one of its four fixes would have silently done nothing.
