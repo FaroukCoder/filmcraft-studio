@@ -39,7 +39,8 @@ models:
       # --mmproj C:/ai/models/mmproj-Qwen3.6-35B-A3B-BF16.gguf
     ttl: 900
 
-  # Fallback daily driver if RAM is 16 GB: dense, fully on the GPU.
+  # Fallback daily driver if RAM is 16 GB: dense, fully on the GPU. Also A/B Gemma 4 12B here
+  # (Apache-2.0, native tool calls, ~8 GB at 16K): swap the -m path to its Q4 QAT GGUF.
   "agent-small":
     cmd: |
       ${llama}

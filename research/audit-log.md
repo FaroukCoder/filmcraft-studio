@@ -733,3 +733,20 @@ the confusions. The test asserts the tool's behaviour, not that the probe wins: 
 - My first test expectation (claps alone should find the phase) was wrong for the same reason.
 
 **Confidence changes:** whatstheID downbeats from "advice" to "prototype tested on synthetic audio" (medium).
+
+## Round 31 — better alternatives for the agent model (04:18–04:19 UTC)
+
+**Attack:** "search specifically for something newer, simpler or better" on Top 10 #7's model choice.
+
+**Found:** Gemma 4 has a 12B size (Google's docs list five sizes; a guide dates the 12B to June 2026), Apache-2.0,
+native function calling, 256K context. Reported ~7.8 GB at 16K context and ~90 tok/s on a 12 GB card, so it runs
+entirely on the GPU: no expert offload, no RAM pressure, faster prefill (which matters after every llama-swap swap).
+Hermes-specific signals favour the family: issue #29677's title says Qwen/DeepSeek output corrupts where "Gemma works
+with same config", and Hermes' local guide names  its reliable tool-caller (the 31B doesn't fit 12 GB).
+No published tool-calling scores for the 12B (one aggregator's TAU2 figure for the 26B-A4B was unsourced).
+
+**Change:** added as the challenger in Top 10 #7's replay (now three-way: your current setup, Qwen3.6-35B-A3B,
+Gemma 4 12B), in the models table and as a comment on  in the llama-swap example (still validates).
+Not a replacement: no evidence yet that it beats Qwen3.6 on your tools.
+
+**Confidence changes:** Top 10 #7 stays medium; it now has a credible no-offload option if RAM or Qwen templates bite.

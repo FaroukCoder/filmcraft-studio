@@ -90,6 +90,7 @@
 - **Do not turn on Tool Search with Qwen models yet.** Its bridge tool is literally named `tool_call`, which collides with the `<tool_call>` tag in Qwen chat templates; Qwen models call the bridge malformed five times and the guardrail halts the turn ([#110442](https://github.com/NousResearch/hermes-agent/issues/110442), open; the rename to `invoke_tool` is in an unmerged PR). The documented workaround is `hermes config set tools.tool_search.enabled off`.
 - **Known Qwen3.6 + llama.cpp issues in Hermes, with workarounds:** pass `--chat-template-file` with the right Qwen template, not only `--jinja`, or output can be garbage ([#29677](https://github.com/NousResearch/hermes-agent/issues/29677)); leave `capabilities.answer_in_reasoning` unset, because a tool call stranded inside `<think>` still happened in **1 of 23 tool-call turns** ([#129440](https://github.com/NousResearch/hermes-agent/issues/129440)); `search_files` can loop when the model passes a glob as a regex ([#66129](https://github.com/NousResearch/hermes-agent/issues/66129)). Expect a few percent of turns to need a retry: "reliable" at 12 GB means "recovers well", not "never fails".
 - **Model:** Qwen3.6-35B-A3B (Apache-2.0, April 2026) if you have ≥32 GB RAM (16 GB has been reported to work, but not with Serato, Chrome and ComfyUI also open); it scores 81.2 on TAU2 agentic tool use against 68.2 for Gemma 4 26B-A4B (vendor-adjacent numbers). Otherwise Qwen3.5-9B (Apache-2.0, dense, hybrid attention so long context is cheap) fully on GPU.
+- **The challenger to A/B in the same replay (round 31):** Gemma 4 12B (Apache-2.0, native function calling, 256K context; Google lists it as the fifth Gemma 4 size). It fits *entirely* on the card (one guide reports ~7.8 GB at 16K context and ~90 tok/s on a 12 GB GPU), so no expert offload, no RAM pressure and faster prompt processing, and the Gemma family has a cleaner record in Hermes: the corrupted-output issue #29677 is titled "Qwen/DeepSeek … produce corrupted output (but Gemma works with same config)", and Hermes' own local guide picks `gemma4:31b` (too big for you) as its reliable tool-caller. Nobody has published tool-calling scores for the 12B that I could find, so replay your 20 requests on both and keep the one with fewer failed tool turns.
 - **Also:** be on ≥ v0.21.2: v0.21.0's session-store rewrite made `state.db` fragile and v0.21.2 closed 44 issues about it. Run `hermes backup` nightly (the docs say never to copy `state.db` alone).
 - **Confidence: medium.** Docs and issues read directly; speed numbers are from a slower card; the failure rates are single reports.
 - **Could fail if:** RAM is 16 GB, or your MCP tool set is so large that the eager schema blows the context. Keep your current Qwen3-Coder-30B/Ollama config as a fallback profile until the new one has a week of clean logs.
@@ -198,7 +199,8 @@ hermes config set model.context_length 65536
 (Key names from Hermes' `local-models.md`, `tool-search.md` and CLI reference; `local_runtime.enabled false` stops Hermes
 starting its own llama.cpp, so llama-swap stays the only GPU owner. Hermes probes `:8080` for a llama-server by default,
 which is where the example llama-swap listens.) Keep the old Ollama setup as a second profile (`hermes profile`), replay 20
-logged requests on both, and keep the one with fewer failed tool turns.
+logged requests on it, on Qwen3.6-35B-A3B and on Gemma 4 12B (`agent-small` with its GGUF), and keep the one with the
+fewest failed tool turns.
 
 **Day 5 (reference clips and the fork, Top 10 #6 and #5).** Collect ~40 clips you think are the target (analysis only):
 ```powershell
@@ -397,7 +399,7 @@ few points, use it for paid clips (a day of aligner work saved) and keep QwenCle
 | Use | Model | VRAM / RAM |
 |---|---|---|
 | Daily driver (≥32 GB RAM) | Qwen3.6-35B-A3B Q4 + `--n-cpu-moe ~24` | ~11 GB VRAM + ~12 GB RAM |
-| Daily driver (16 GB RAM) | Qwen3.5-9B Q5/Q6 | ~7–9 GB VRAM |
+| Daily driver (16 GB RAM), or the challenger | Qwen3.5-9B Q5/Q6, or Gemma 4 12B Q4 (QAT) | ~7–9 GB VRAM / ~8 GB at 16K |
 | Router | Laya (`laya` 421M ModernBERT-large / `laya-multilingual` 322M mmBERT-base), fine-tuned | CPU, 0.4–0.8 s with pinned threads |
 | Router baseline | EmbeddingGemma-300M + logistic regression | CPU, milliseconds |
 
