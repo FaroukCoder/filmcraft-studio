@@ -175,7 +175,7 @@ lists it; or a GGUF behind llama-swap, Day 3).
 
 **Day 3 (one GPU, Top 10 #2).**
 ```powershell
-winget install llama-swap
+winget install --id mostlygeek.llama-swap
 ```
 Download a CUDA build of llama.cpp (`llama-b<N>-bin-win-cuda-…-x64.zip` from its GitHub releases), copy
 [`prototypes/llama-swap.example.yaml`](prototypes/llama-swap.example.yaml), fix the paths, then:

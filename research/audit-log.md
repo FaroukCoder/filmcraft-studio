@@ -1204,3 +1204,15 @@ Windows support is not stated. Added to #9 as the fallback if pose drops out, an
   with the hand-back, not into this public branch.
 
 **Confidence changes:** none; #10's first step gains the patch.
+
+## Round 54 — the last unrun commands (06:02–06:02 UTC)
+
+**Attack:** the first-week commands not yet checked against the tools. yt-dlp 2026.08.19 (PyPI) has `--batch-file`,
+`-f`, `--sleep-requests`, `--sleep-interval` and `--max-sleep-interval` as used in Day 5 and Reel Brain's throttling
+advice. The WinGet package exists as `mostlygeek.llama-swap` in microsoft/winget-pkgs (versions up to 264 at least);
+Day 3 now uses `winget install --id mostlygeek.llama-swap`, since the bare `llama-swap` depends on a moniker I couldn't
+confirm. With rounds 40, 49 and 50, every command in the first week has now been checked against the tool's code or
+run, except the Windows-only ones (`Get-CimInstance`, `nvidia-smi -lgc`, PowerShell's `Resolve-Path`), which are
+standard.
+
+**Confidence changes:** none.
