@@ -68,7 +68,7 @@ remain unread: every licence claim that depends on one is marked medium confiden
 - Top 10 reshuffled: virality and Reel Brain classification moved into their project sections; Laya (#2) and a
   "house look" move (#8, low confidence) added.
 
-## Round 2 — Creative Studio audit (02:11–02:20 UTC)
+## Round 2 — Creative Studio audit (02:10–02:16 UTC)
 
 **Attacked:** licences of generation models, Beat This on electronic music, Serato history availability, the L1
 reframing idea, HyperFrames, the planner/judge design, the "measure reference clips" claim, FilmCraft as the base.
@@ -97,7 +97,7 @@ reframing idea, HyperFrames, the planner/judge design, the "measure reference cl
 **Open for later rounds:** Timeline-Bench kappa figure (search snippet only; arXiv unreachable); MiniMax H3 licence
 text (HF unreachable); whether Instagram's API path allows reels with their own audio (one third-party claim says no).
 
-## Round 3 — Hermes + Laya audit (02:20–02:30 UTC)
+## Round 3 — Hermes + Laya audit (02:16–02:19 UTC)
 
 **Attacked:** the llama.cpp move, Tool Search, model choice, memory layer, "acting on plans", Laya fine-tuning,
 GPU scheduling between agents. Read Hermes issues directly on GitHub.
@@ -123,4 +123,23 @@ GPU scheduling between agents. Read Hermes issues directly on GitHub.
 high for "measure and fine-tune"; how much it gains on your routes is unknown.
 
 **Open:** TAU2 numbers (81.2 vs 68.2) are vendor-adjacent; no independent Hermes-specific benchmark of local models.
+
+## Round 4 — Reel Brain + Inspiration Canvas audit (02:20–02:25 UTC)
+
+**Attacked:** the Ollama-penalty explanation for looping JSON, frame budgets, VLM licences, repo linking,
+GPU load per reel, the Instagram export path, JSON Canvas as a storage format.
+
+**Strengthened:** a second Ollama issue (#15783) confirms the Go sampler drops all three penalties
+(`repeat_penalty: 5.0` ≡ `1.0`), and Ollama runs Qwen3-VL on that engine since 0.12.7.
+
+**Added a likelier, cheaper cause:** image-token overflow. ~2,000 tokens per full-resolution vertical frame; Ollama
+#13084 shows Qwen3-VL producing garbage past `num_ctx`. The first step of Top 10 #3 is now "log prompt tokens,
+downscale frames", before switching servers.
+
+**Changed:** repo linking gets a first tier that reads explicit `owner/repo` strings from OCR/caption/transcript
+before any search. Reel Brain gets "call the VLM only when frames add information". MiniCPM-V 4.5 weights are under
+a custom licence (registration for commercial use): fine for personal use.
+
+**Unverified:** the exact file name of saved posts in Instagram's JSON export (no source found; inspect the ZIP).
+JSON Canvas spec confirmed by reading it (file/text/link/group nodes).
 
