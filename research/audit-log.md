@@ -124,7 +124,7 @@ high for "measure and fine-tune"; how much it gains on your routes is unknown.
 
 **Open:** TAU2 numbers (81.2 vs 68.2) are vendor-adjacent; no independent Hermes-specific benchmark of local models.
 
-## Round 4 — Reel Brain + Inspiration Canvas audit (02:20–02:25 UTC)
+## Round 4 — Reel Brain + Inspiration Canvas audit (02:19–02:21 UTC)
 
 **Attacked:** the Ollama-penalty explanation for looping JSON, frame budgets, VLM licences, repo linking,
 GPU load per reel, the Instagram export path, JSON Canvas as a storage format.
@@ -143,7 +143,7 @@ a custom licence (registration for commercial use): fine for personal use.
 **Unverified:** the exact file name of saved posts in Instagram's JSON export (no source found; inspect the ZIP).
 JSON Canvas spec confirmed by reading it (file/text/link/group nodes).
 
-## Round 5 — whatstheID audit (02:21–02:27 UTC)
+## Round 5 — whatstheID audit (02:21–02:23 UTC)
 
 **Attacked:** rb2serato on Windows, Rekordbox dynamic grids, phrase/cue detection, stretch-robust fingerprinting,
 whether sharing the tool makes sense, competitors.
@@ -162,7 +162,7 @@ whether sharing the tool makes sense, competitors.
 **Killed:** nothing this round. The weakest whatstheID item is still the visualiser advice (design opinion, no
 evidence), and "share it with other DJs" (crowded field, legal exposure from downloading). Both stay low priority.
 
-## Round 6 — cross-project audit (02:23–02:30 UTC)
+## Round 6 — cross-project audit (02:23–02:24 UTC)
 
 **Attacked:** whether the shared GPU broker needs custom code, how the pieces fit together, and my own bias toward
 adding things.
@@ -181,4 +181,27 @@ clips, Laya fixed or removed, heavy coding stays on Claude Code).
 
 **Consistency fix:** Hermes (Top 10 #4) now points at llama-swap so it doesn't hold the card outside the shared
 scheduler.
+
+## Round 7 — money audit (02:24–02:33 UTC)
+
+**Checked:** YouTube Partner Program country list (Egypt included), Instagram/Facebook monetisation (Egypt not
+confirmed for either), Payoneer fees (~1 % + ~1.85–2 % FX), Upwork fees (variable 0–15 %, $0.99 local bank
+withdrawal), Fiverr (20 %, Payoneer-powered bank payout), InstaPay caps, Gumroad/Lemon Squeezy payouts, card limits
+for paying for cloud tools, competitor prices on Fiverr, Upwork, Khamsat and a Cairo agency (Arabic searches).
+
+**Killed or reversed**
+- **"Event clip packs for the collective" as the first *income*** → kept as path 1 but reframed. Local reel editing
+  is priced at $5–50 on Khamsat and as low as 100 EGP; shoot packages from EGP 3,000. It is a portfolio and network
+  play that pays modestly. The pitch changed from "AI clips" to "next-morning delivery", the thing automation buys.
+- **"Sell whatstheID / a DJ tool"** → demoted to last. Gumroad's PayPal payouts reportedly exclude Egypt, Lemon
+  Squeezy's bank list for Egypt is unverified, Lexicon's free tier already converts libraries, and the tracklist
+  space is crowded.
+- **"Your own clip channel as income"** → portfolio only. Content ID claims on other artists' tracks plus no
+  TikTok/Instagram creator payouts in Egypt.
+
+**Added:** Fiverr podcast-shorts gigs at $10–45 per clip (~736 services in one category): generic clipping is a
+race to the bottom; Egyptian-dialect captions are the differentiator. Agent-setup gigs ($50–200) as a cheap test.
+
+**Unverified:** Upwork Direct-to-Local-Bank in EGP for 2026; current InstaPay caps; Instagram creator monetisation in
+Egypt; any real price a Cairo collective has paid for clips (no source exists; the first test produces it).
 
