@@ -509,3 +509,29 @@ to end.
 
 **Confidence changes:** "an LLM plan can drive the fork" from assumed to tested on synthetic footage (medium →
 high for the mechanics; footage quality still untested).
+
+## Round 19 — GPU sharing tested against the real llama-swap (03:35–03:44 UTC)
+
+**Attack:** Top 10 #6 and Day 3 rest on a config and a guard that had never met a running llama-swap (the binary
+couldn't be downloaded in round 9). Built llama-swap from source (Go toolchain in the container) instead.
+
+**Confirmed:** `-validate` passes on the committed config; with stand-in servers in place of llama.cpp/ComfyUI:
+the exclusive group keeps one model loaded (asking for `vlm` unloads `agent`), `/comfyui/` loads `comfyui_auto`,
+`POST /api/models/unload` empties it, `/v1/audio/transcriptions` with `model=asr-eg` reaches the QwenCleo entry.
+
+**What broke**
+- **The DJ guard made things worse in one case.** Pointing its ComfyUI "free" call at llama-swap's `/comfyui/`
+  route *started* ComfyUI, so DJ mode ended with ComfyUI on the GPU. (The flag's help said "outside llama-swap",
+  but nothing stopped the obvious misuse, and I made it myself.)
+- **Nothing stopped a model reloading mid-set.** Unload alone lasts until the next Hermes message or batch item.
+  The report said the guard "stops the llama-swap service", but Day 3 ran it without stop commands.
+- **Fix, tested:** a `dj` profile in the llama-swap config with every pin null (models answer 404 while it is
+  active; found in llama-swap's config reference), switched by `PUT /api/profiles/active`; the guard re-unloads
+  anything that loads anyway (the `/comfyui/` route ignores profiles), and clears the profile on exit. No service
+  stop/start needed. New `test_dj_guard_llama_swap.py` runs all of it against the real binary (SKIP without it);
+  the fake-server unit test covers the same calls.
+- Test hygiene: a leftover llama-swap held the port and silently answered a later test; the real-binary test now
+  picks a free port and tears everything down.
+
+**Confidence changes:** Top 10 #6 stays medium (Windows, DPC latency and thermals untested) but its mechanics are
+now tested rather than read.

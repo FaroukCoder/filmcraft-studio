@@ -86,6 +86,20 @@ models:
     ttl: 600
     unlisted: true
 
+# DJ mode: dj_guard.py switches to this profile while Serato or Ableton runs. Every pin is
+# null, so llama-swap answers each model with 404 instead of loading it onto the GPU.
+# (The /comfyui/ route ignores profiles; the guard unloads anything that starts anyway.)
+profiles:
+  "dj":
+    description: "Serato or Ableton is running: no GPU models"
+    pins:
+      "agent": ~
+      "agent-small": ~
+      "vlm": ~
+      "vlm-glm": ~
+      "asr-eg": ~
+      "comfyui_auto": ~
+
 routing:
   router:
     use: group

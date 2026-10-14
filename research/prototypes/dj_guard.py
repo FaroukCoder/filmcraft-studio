@@ -1,14 +1,20 @@
 """Keep the GPU quiet while you DJ or produce (Top 10 #6).
 
-Polls for Serato or Ableton. When one starts: unloads every model behind llama-swap
-(POST /api/models/unload), optionally frees ComfyUI (POST /api/free), runs your stop
-commands (e.g. stop the llama-swap service) and writes a lock file. When they have
-all exited: runs your start commands and removes the lock. Batch jobs call
-`gpu_allowed()` before taking work, so they pause instead of fighting your set.
+Polls for Serato or Ableton. When one starts: switches llama-swap to a "dj" profile that
+answers every model with 404 (PUT /api/profiles/active), unloads everything
+(POST /api/models/unload), runs your stop commands and writes a lock file. While you play,
+anything that starts anyway is unloaded again on the next poll (llama-swap's /comfyui/
+route ignores profiles). When the apps have all exited: clears the profile, runs your
+start commands and removes the lock. Batch jobs call `gpu_allowed()` before taking work.
 
-    python dj_guard.py --llama-swap http://127.0.0.1:8080 \
-        --stop "sc stop llama-swap" --start "sc start llama-swap"
+    python dj_guard.py --llama-swap http://127.0.0.1:8080
     python dj_guard.py --once      # print the current state and exit
+
+The "dj" profile lives in llama-swap's config (see llama-swap.example.yaml): one pin per
+model, each set to null. Tested against a real llama-swap build (October 2026). Only pass
+--comfyui for a ComfyUI that runs OUTSIDE llama-swap: calling ComfyUI through llama-swap's
+/comfyui/ route starts it, which is how the first version of this guard ended DJ mode with
+ComfyUI loaded.
 
 Windows process names it watches by default: Serato DJ Pro.exe, Serato DJ Lite.exe,
 Serato DJ.exe, Ableton Live*.exe (any edition). Add more with --watch.
@@ -55,6 +61,22 @@ def _post(url: str, body: dict | None = None) -> str:
         return f"{url} -> {type(e).__name__}"
 
 
+def _put(url: str, body: dict) -> str:
+    try:
+        r = httpx.put(url, json=body, timeout=10)
+        return f"PUT {url} {json.dumps(body)} -> {r.status_code}"
+    except httpx.HTTPError as e:
+        return f"PUT {url} -> {type(e).__name__}"
+
+
+def loaded_models(base: str) -> list[str] | None:
+    try:
+        r = httpx.get(f"{base}/running", timeout=5)
+        return [m.get("model", "?") for m in r.json().get("running", [])]
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return None
+
+
 def _run(cmds: list[str], dry: bool) -> list[str]:
     out = []
     for c in cmds:
@@ -70,6 +92,8 @@ def _run(cmds: list[str], dry: bool) -> list[str]:
 def enter_dj_mode(args, apps: list[str]) -> list[str]:
     log = []
     if args.llama_swap:
+        if args.profile:
+            log.append(_put(f"{args.llama_swap}/api/profiles/active", {"name": args.profile}))
         log.append(_post(f"{args.llama_swap}/api/models/unload"))
     if args.comfyui:
         log.append(_post(f"{args.comfyui}/api/free", {"unload_models": True, "free_memory": True}))
@@ -78,8 +102,20 @@ def enter_dj_mode(args, apps: list[str]) -> list[str]:
     return log
 
 
+def enforce(args) -> str | None:
+    """In DJ mode: unload anything that got loaded anyway (e.g. a ComfyUI job via /comfyui/)."""
+    if not args.llama_swap:
+        return None
+    names = loaded_models(args.llama_swap)
+    if names:
+        return f"loaded during DJ mode: {names}; " + _post(f"{args.llama_swap}/api/models/unload")
+    return None
+
+
 def leave_dj_mode(args) -> list[str]:
     log = _run(args.start, args.dry_run)
+    if args.llama_swap and args.profile:
+        log.append(_put(f"{args.llama_swap}/api/profiles/active", {"name": None}))
     LOCK.unlink(missing_ok=True)
     return log
 
@@ -88,7 +124,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--watch", action="append", default=[], help="extra process-name pattern")
     ap.add_argument("--llama-swap", help="base URL of llama-swap, e.g. http://127.0.0.1:8080")
-    ap.add_argument("--comfyui", help="base URL of a ComfyUI that runs outside llama-swap")
+    ap.add_argument("--profile", default="dj", help="llama-swap profile that blocks GPU models ('' to skip)")
+    ap.add_argument("--comfyui", help="base URL of a ComfyUI that runs OUTSIDE llama-swap (never its /comfyui/ route)")
     ap.add_argument("--stop", action="append", default=[], help="command to run on entering DJ mode")
     ap.add_argument("--start", action="append", default=[], help="command to run on leaving DJ mode")
     ap.add_argument("--interval", type=float, default=3.0)
@@ -115,6 +152,9 @@ def main(argv=None) -> int:
                 in_dj, gone_since = False, None
         elif apps:
             gone_since = None
+            note = enforce(args)
+            if note:
+                print(note, flush=True)
         loops += 1
         if args.max_loops and loops >= args.max_loops:
             return 0
