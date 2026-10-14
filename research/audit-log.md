@@ -576,3 +576,23 @@ can a route actually change anything inside Hermes?
 
 **Kills:** none. **Confidence changes:** Top 10 #2 stays high; it now ends in a measured promotion step instead of
 "keep whichever wins".
+
+## Round 22 — Reel Brain: repo linking built and tested (03:48–03:52 UTC)
+
+**Attack:** the report's three-tier repo linking was prose. Built it (`prototypes/repo_linker.py`) with an offline
+test of the failure modes that produce false matches.
+
+**What the test caught:** my first weighting (name 0.45, owner 0.15, description fit 0.30) let a closed SaaS through:
+"Gamma" (slides) matched `gamma-ray/gamma` on name + owner with nothing in common with the reel. That is the exact
+false-match pattern Reel Brain has. Reweighted so the description fit carries a match (name 0.35, owner 0.10, fit
+0.45, stars 0.10, accept 0.55): name + owner alone can't pass. Owner matching also needed a length guard.
+
+**Covered:** explicit links (trailing punctuation, OCR typos fall back to search), Hugging Face links, `owner/repo`
+only next to a cue word ("24/7", "and/or", "50/50" ignored), `pip install` / `npm i` captured, forks lose to
+originals, Whisper-split names ("lang chain"), substrings rejected ("Rez" ≠ "Rez Band"), empty names refused,
+near-ties returned as "ambiguous".
+
+**Not verified:** live GitHub/HF API calls (blocked from this container); precision on your reels (the first step
+now measures it on the same 50 reels as the blind re-label).
+
+**Confidence changes:** Reel Brain repo linking stays medium (logic tested, real-data precision unknown).
