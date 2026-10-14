@@ -355,7 +355,7 @@ Money path 2 gets one more day of work before the first proposal.
 **Confidence changes:** Top 10 #3 stays medium; the Ollama-vs-llama-server rerun on Day 3 now settles the server
 question within the first week.
 
-## Round 13 — money: hidden costs and demand evidence (03:03–03:14 UTC)
+## Round 13 — money: hidden costs and demand evidence (03:03–03:06 UTC)
 
 **Attack:** "what does this cost you in Cairo that the report never priced?" and "is there evidence anyone pays
 for DJ clips, or did I assume it?"
@@ -381,3 +381,28 @@ the evidence.
 
 **Confidence changes:** money path 3 enters at low (demand thin); hidden-cost figures medium (aggregator and news
 sources, not bills).
+
+## Round 14 — bias check (03:06–03:08 UTC)
+
+**Attack:** "where does the report agree with you, or with me, for reasons other than evidence?" Five biases
+checked:
+1. **Verification bias** (favouring what I can read on GitHub). Commercial tools were under-weighted. For Arabic
+   captions, **ElevenLabs Scribe** returns Arabic word timings, lists Egyptian among its accents and costs
+   ~$0.40/audio hour; it may beat a day of aligner work for paid clips. Added as a paid A/B. **Submagic and Opus
+   Clip** sell Arabic auto-captions to the same clients money path 2 targets; the report claimed an Egyptian-dialect
+   edge it had never measured against them. Added a one-clip comparison as the first step of path 2.
+2. **Sunk cost toward your stack** (FilmCraft fork, Hermes, Laya). Tested FilmCraft's fit instead of assuming it:
+   `filmcraft-cli mcp` runs headless with an in-process session, and `file.exportMedia` already takes h264, any
+   width/height, CRF, loudness target, burned-in captions and hardware encoding. FilmCraft earns its place; the
+   report now says to drive it headless, which sidesteps the Windows UI risk (G9). Laya was steelmanned in round 9.
+3. **Automation bias** (building before selling). Money path 1's first test now says to cut the first free pack by
+   hand if the pipeline isn't ready: the test is demand, not automation.
+4. **Recency bias.** Several picks are months old with few users (rb2serato 1 star, QwenCleo 19, markus 9,
+   GLM-4.6V-Flash new). Each already carries a low-star warning and a fallback; no change.
+5. **Measurement bias** (always "measure first"). Each measurement step is ≤ 1 day and the first week ends with a
+   pitch, so it doesn't stall shipping; no change.
+
+**Kills:** none. **Additions:** Scribe row in the models table; headless FilmCraft export recipe; competitor check
+in path 2; an uncertainty row on the caption edge.
+
+**Confidence changes:** money path 2 moves from medium to low until the competitor comparison is done.
